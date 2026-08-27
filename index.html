@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MathTrace</title>
+    <link rel="stylesheet" href="viewer/mathtrace.css?v=49">
+    <script>
+      window.MathTraceBoot = (() => {
+        let failureMessage = "";
+        let fallbackTimer = null;
+
+        function loadingScreen() {
+          return document.querySelector("#loading-screen");
+        }
+
+        function showFailure(message) {
+          failureMessage = message || "Reload the page or verify that all interface files were copied.";
+          const screen = loadingScreen();
+
+          if (!screen) {
+            return;
+          }
+
+          screen.classList.add("has-failed");
+          screen.querySelector("#loading-title").textContent = "MathTrace could not start";
+          screen.querySelector("#loading-description").textContent = failureMessage;
+          screen.querySelector(".loading-indicator").setAttribute("hidden", "");
+        }
+
+        window.addEventListener("error", (event) => {
+          if (event.target instanceof HTMLScriptElement) {
+            showFailure(`The required file ${event.target.getAttribute("src")} could not be loaded.`);
+          }
+        }, true);
+
+        document.addEventListener("DOMContentLoaded", () => {
+          if (failureMessage) {
+            showFailure(failureMessage);
+          }
+
+          fallbackTimer = window.setTimeout(() => {
+            showFailure("Initialization took too long. Reload the page or verify that all interface files were copied.");
+          }, 20000);
+        }, { once: true });
+
+        return {
+          fail: showFailure,
+          ready() {
+            window.clearTimeout(fallbackTimer);
+            const screen = loadingScreen();
+
+            if (!screen || screen.classList.contains("has-failed")) {
+              return Promise.resolve();
+            }
+
+            screen.classList.add("is-complete");
+            document.body.classList.remove("is-loading");
+            return new Promise((resolve) => {
+              window.setTimeout(() => {
+                screen.setAttribute("hidden", "");
+                resolve();
+              }, 240);
+            });
+          }
+        };
+      })();
+
+      window.MathJax = {
+        tex: {
+          inlineMath: [["$", "$"], ["\\(", "\\)"]],
+          displayMath: [["$$", "$$"], ["\\[", "\\]"]],
+          processEscapes: true
+        },
+        svg: {
+          fontCache: "local"
+        },
+        startup: {
+          typeset: false
+        }
+      };
+    </script>
+    <script src="viewer/vendor/markdown-it.min.js" defer></script>
+    <script src="viewer/vendor/mathjax-tex-svg.js" defer></script>
+    <script src="viewer/vendor/js-yaml.min.js" defer></script>
+    <script src="viewer/vendor/elk.bundled.js" defer></script>
+    <script src="viewer/paper-parser.js?v=49" defer></script>
+    <script src="viewer/project-model.js?v=49" defer></script>
+    <script src="viewer/graph-view.js?v=49" defer></script>
+    <script src="viewer/bundle-editor.js?v=49" defer></script>
+    <script src="viewer/node-editor.js?v=49" defer></script>
+    <script src="viewer/content-view.js?v=49" defer></script>
+    <script src="viewer/paper-export.js?v=49" defer></script>
+    <script src="viewer/mathtrace.js?v=49" defer></script>
+  </head>
+  <body class="is-loading">
+    <div class="loading-screen" id="loading-screen" role="status" aria-live="polite">
+      <div class="loading-card">
+        <div class="loading-mark" aria-hidden="true">M</div>
+        <h1 id="loading-title">MathTrace</h1>
+        <p id="loading-description">Preparing the paper viewer…</p>
+        <span class="loading-indicator" aria-hidden="true"></span>
+      </div>
+    </div>
+
+    <header class="app-header">
+      <a class="brand" href="./" aria-label="MathTrace home">MathTrace</a>
+      <nav class="app-header-actions" aria-label="Global actions">
+        <button
+          class="graph-action-button toggle-content-button"
+          id="toggle-content-panel"
+          type="button"
+          aria-controls="content-panel"
+          aria-expanded="true"
+          title="Hide paper or node content"
+        >Hide content</button>
+        <button
+          class="graph-action-button add-paper-button"
+          id="open-paper-dialog"
+          type="button"
+          aria-label="Add another MathTrace paper"
+        >Add paper</button>
+        <button
+          class="documentation-button"
+          id="open-documentation"
+          type="button"
+          aria-controls="documentation-panel"
+          aria-expanded="false"
+        >Documentation</button>
+      </nav>
+    </header>
+
+    <main class="workspace">
+      <section class="panel graph-panel" aria-labelledby="graph-heading">
+        <header class="panel-header">
+          <h1 id="graph-heading">Dependency Graph</h1>
+          <div class="graph-header-tools">
+            <button
+              class="create-node-button"
+              id="create-node"
+              type="button"
+              disabled
+            >Create node</button>
+            <div class="bundle-menu" id="bundle-menu">
+              <button
+                class="bundle-menu-button"
+                id="bundle-menu-button"
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-controls="bundle-menu-popover"
+                disabled
+              >
+                <span>Papers</span>
+                <span class="bundle-menu-count" id="bundle-menu-count">0</span>
+                <span class="bundle-menu-chevron" aria-hidden="true">▾</span>
+              </button>
+              <div class="bundle-menu-popover" id="bundle-menu-popover" hidden>
+                <div class="bundle-menu-heading">
+                  <div>
+                    <strong>Open papers</strong>
+                    <span id="bundle-menu-description">Select once to read a paper; select it again in the graph to expand it.</span>
+                  </div>
+                  <button class="bundle-menu-create" id="create-bundle" type="button">Add paper</button>
+                </div>
+                <div class="bundle-menu-list" id="bundle-menu-list" role="group" aria-label="Open papers"></div>
+              </div>
+            </div>
+          </div>
+          <button
+            class="close-linked-node-preview-button"
+            id="close-linked-node-preview"
+            type="button"
+            hidden
+          >Close</button>
+        </header>
+
+        <div class="graph-surface" id="graph-surface" tabindex="0" aria-label="Dependency graph workspace">
+          <div class="paper-card-view" id="paper-card-view" hidden>
+            <article class="paper-card is-selected" aria-labelledby="paper-card-title" aria-current="true">
+              <div class="paper-card-topline">
+                <span class="paper-card-type">Research paper</span>
+                <code class="paper-card-id" id="paper-card-id"></code>
+              </div>
+              <h2 id="paper-card-title"></h2>
+              <p class="paper-card-authors" id="paper-card-authors"></p>
+              <dl class="paper-card-facts">
+                <div>
+                  <dt>Status</dt>
+                  <dd id="paper-card-status">Not specified</dd>
+                </div>
+                <div>
+                  <dt>Date</dt>
+                  <dd id="paper-card-date">Not specified</dd>
+                </div>
+                <div>
+                  <dt>Nodes</dt>
+                  <dd id="paper-card-node-count">0</dd>
+                </div>
+                <div>
+                  <dt>Dependencies</dt>
+                  <dd id="paper-card-bundle-count">0</dd>
+                </div>
+              </dl>
+              <button class="expand-paper-button" id="expand-paper-button" type="button">
+                <span>Expand paper</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </article>
+          </div>
+          <div class="empty-state" id="graph-empty-state">
+            <p class="empty-state-title" id="graph-status-title">Dependency graph</p>
+            <p id="graph-status-description">The paper graph will be rendered in this panel.</p>
+          </div>
+          <svg
+            class="dependency-graph"
+            id="dependency-graph"
+            width="100%"
+            height="100%"
+            role="img"
+            aria-labelledby="dependency-graph-title dependency-graph-description"
+            hidden
+          >
+            <title id="dependency-graph-title">MathTrace dependency graph</title>
+            <desc id="dependency-graph-description">A layered graph of mathematical nodes and their dependencies.</desc>
+            <g id="graph-viewport"></g>
+          </svg>
+          <div class="graph-toolbar" id="graph-toolbar" aria-label="Graph view controls" hidden>
+            <button type="button" data-graph-action="zoom-out" aria-label="Zoom out" title="Zoom out">&minus;</button>
+            <output class="zoom-level" id="graph-zoom-level" aria-label="Current zoom level">100%</output>
+            <button type="button" data-graph-action="zoom-in" aria-label="Zoom in" title="Zoom in">+</button>
+            <button class="fit-button" type="button" data-graph-action="fit" title="Fit graph to panel">Fit</button>
+          </div>
+          <section class="node-editor-view" id="node-editor-view" aria-labelledby="node-editor-title" hidden>
+            <header class="node-editor-header">
+              <div>
+                <p class="panel-kicker" id="node-editor-kicker">Node source</p>
+                <h2 id="node-editor-title">Edit node</h2>
+              </div>
+              <div class="node-editor-actions">
+                <button class="save-node-button" id="save-node" type="button">Save</button>
+                <button class="delete-node-button" id="delete-node" type="button" hidden disabled>Delete</button>
+                <button id="cancel-node-edit" type="button">Cancel</button>
+              </div>
+            </header>
+            <div class="node-editor-body">
+              <div class="node-editor-context">
+                <code id="node-editor-path">nodes/new-node.md</code>
+                <span id="node-editor-context"></span>
+              </div>
+              <label class="node-source-field" for="node-source-editor">Node Markdown source</label>
+              <div class="node-source-editor-shell">
+                <pre class="node-source-highlight" id="node-source-highlight" aria-hidden="true"></pre>
+                <textarea
+                  id="node-source-editor"
+                  spellcheck="false"
+                  autocomplete="off"
+                  aria-describedby="node-editor-status"
+                ></textarea>
+              </div>
+              <p class="node-editor-status" id="node-editor-status" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+          <section
+            class="linked-node-preview"
+            id="linked-node-preview"
+            aria-labelledby="graph-heading"
+            hidden
+          >
+            <article class="node-reader linked-node-reader" id="linked-node-reader" aria-live="polite"></article>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel content-panel" id="content-panel" aria-labelledby="content-heading">
+        <header class="panel-header">
+          <h1 id="content-heading">Selected node</h1>
+          <div class="content-panel-actions">
+            <button
+              class="expand-node-button"
+              id="expand-node"
+              type="button"
+              aria-controls="content-panel"
+              aria-pressed="false"
+              disabled
+            >Expand node</button>
+            <button class="edit-node-button" id="edit-node" type="button" disabled>Edit node</button>
+          </div>
+        </header>
+
+        <article class="node-reader is-empty" id="node-reader" aria-live="polite">
+          <div class="empty-state">
+            <p class="empty-state-title" id="reader-status-title">Select a paper</p>
+            <p id="reader-status-description">Select a paper card once to read its overview. Select it again to expand its dependency graph.</p>
+          </div>
+        </article>
+      </section>
+
+      <section
+        class="documentation-panel"
+        id="documentation-panel"
+        aria-labelledby="documentation-heading"
+        hidden
+      >
+        <header class="documentation-header">
+          <div>
+            <p class="panel-kicker">MathTrace guide</p>
+            <h1 id="documentation-heading" tabindex="-1">Documentation</h1>
+          </div>
+          <button class="close-documentation-button" id="close-documentation" type="button">
+            Close documentation
+          </button>
+        </header>
+
+        <div class="documentation-layout">
+          <nav class="documentation-nav" aria-label="Documentation sections">
+            <a href="#docs-getting-started">Getting started</a>
+            <a href="#docs-project-structure">Project structure</a>
+            <a href="#docs-node-files">Node Markdown</a>
+            <a href="#docs-demos">HTML and demos</a>
+            <a href="#docs-paper-file">Paper manifest</a>
+            <a href="#docs-authoring">Authoring principles</a>
+            <a href="#docs-ai-conversion">AI conversion</a>
+            <a href="#docs-node-editing">Editing nodes</a>
+            <a href="#docs-paper-workspace">Paper workspace</a>
+            <a href="#docs-viewer">Using the viewer</a>
+            <a href="#docs-validation">Validation and privacy</a>
+          </nav>
+
+          <article class="documentation-content">
+            <section id="docs-getting-started">
+              <p class="documentation-eyebrow">Getting started</p>
+              <h2>Open or author a MathTrace paper</h2>
+              <ol>
+                <li>Select <strong>Add paper</strong> in the global header.</li>
+                <li>Choose a native MathTrace folder containing <code>mathtrace.paper.md</code> and its node files.</li>
+                <li>Select a paper card once to read its paper-level content, then select it again to expand its dependency graph.</li>
+              </ol>
+              <p>A MathTrace paper consists of one required <code>mathtrace.paper.md</code> manifest, a directory of Markdown nodes, and an optional <code>demos/</code> directory for interactive content. The manifest describes the work and tells MathTrace where to find and draw its nodes. Every loaded paper is a flat module containing ordinary nodes rather than nested bundles.</p>
+              <aside class="documentation-note"><strong>Design goal.</strong> The graph is a distilled model of the paper's mathematical structure—not a table of contents or a paragraph-by-paragraph transcript.</aside>
+            </section>
+
+            <section id="docs-project-structure">
+              <h2>Native project structure</h2>
+              <p>Select the project folder itself when opening a native paper. MathTrace recursively finds every <code>.md</code> file beneath the configured node directory.</p>
+              <pre class="documentation-code"><code>example-paper/
+├── mathtrace.paper.md
+├── nodes/
+│   ├── graph/
+│   │   ├── chromatic-number.md
+│   │   └── homomorphism.md
+│   └── main-theorem.md
+└── demos/
+    ├── graph-coloring.js
+    └── graph-coloring.css</code></pre>
+              <div class="documentation-file-grid">
+                <div><code>mathtrace.paper.md</code><span>Required manifest. Supplies paper metadata and prose, locates the node directory, and stores graph-layout preferences.</span></div>
+                <div><code>nodes/**/*.md</code><span>One conceptual mathematical unit per file. Subfolders are editorial organization and are independent of node IDs.</span></div>
+                <div><code>demos/**/*</code><span>Optional scripts, stylesheets, and assets referenced by interactive node content. The complete directory is preserved on download.</span></div>
+              </div>
+              <p>Node IDs are stable mathematical identities; paths are organizational locations. Moving a file between folders must not change its ID, and changing an ID does not move its file. Dependencies always use IDs rather than paths.</p>
+            </section>
+
+            <section id="docs-node-files">
+              <p class="documentation-eyebrow">File reference</p>
+              <h2>Writing node Markdown files</h2>
+              <p>Each node file begins with YAML frontmatter enclosed by <code>---</code> lines. Everything after the second delimiter is rendered as the node's Markdown content. The reader displays the stable node ID beneath the title so it can be copied into new <code>requires</code> lists and wikilinks.</p>
+
+              <h3>Required frontmatter</h3>
+              <div class="documentation-table-wrap">
+                <table class="documentation-table">
+                  <thead><tr><th scope="col">Attribute</th><th scope="col">Type</th><th scope="col">Use</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>id</code></td><td>Nonempty string</td><td>Unique stable identifier. Prefer a paper-qualified descriptive ID such as <code>matrix-method.heuberger-matrix</code>. Do not encode the node's current folder path in the ID.</td></tr>
+                    <tr><td><code>title</code></td><td>Nonempty string</td><td>The node's only display name, shown in the graph and at the top of the content panel.</td></tr>
+                    <tr><td><code>kind</code></td><td>Nonempty string</td><td>Classifies the idea. Store lowercase values such as <code>definition</code>, <code>lemma</code>, <code>proposition</code>, <code>theorem</code>, <code>corollary</code>, <code>construction</code>, <code>example</code>, <code>algorithm</code>, <code>computation</code>, <code>exposition</code>, <code>remark</code>, <code>conjecture</code>, or <code>question</code>.</td></tr>
+                    <tr><td><code>requires</code></td><td>List of node IDs</td><td>Creates incoming dependency arrows from direct prerequisites. It must always be present, even as <code>[]</code>. IDs must exist, be unique in the list, and keep the graph acyclic.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h3>Default graph colors</h3>
+              <p>The graph uses restrained, light fills for six common mathematical roles: definitions are blue, lemmas green, propositions teal, corollaries lavender, theorems rose, and examples amber. All other node kinds are white. Selection and dependency highlighting temporarily override these defaults.</p>
+
+              <h3>Optional frontmatter</h3>
+              <div class="documentation-table-wrap">
+                <table class="documentation-table">
+                  <thead><tr><th scope="col">Attribute</th><th scope="col">Type</th><th scope="col">Use</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>status</code></td><td>String</td><td>Editorial state such as <code>draft</code>, <code>reviewed</code>, <code>final</code>, or <code>deprecated</code>.</td></tr>
+                    <tr><td><code>tags</code></td><td>List of strings</td><td>Subject labels for filtering and compact display.</td></tr>
+                    <tr><td><code>source</code></td><td>Mapping</td><td>Records provenance such as source filename, section, page, theorem number, DOI, arXiv ID, or LaTeX label.</td></tr>
+                    <tr><td><code>citations</code></td><td>List</td><td>Bibliographic keys or structured citations directly supporting the node.</td></tr>
+                    <tr><td><code>aliases</code></td><td>List of strings</td><td>Alternative names for future search and link resolution.</td></tr>
+                    <tr><td><code>related</code></td><td>List of node IDs</td><td>Useful non-prerequisite connections. These do not create dependency arrows.</td></tr>
+                    <tr><td><code>contributors</code></td><td>List</td><td>People who authored, reviewed, translated, or substantially revised the node.</td></tr>
+                    <tr><td><code>ai_assistance</code></td><td>Mapping</td><td>Records the level of AI assistance, model, and whether a human reviewed it.</td></tr>
+                    <tr><td><code>lean_verified</code></td><td>Mapping</td><td>Links a Lean declaration and optionally its repository and commit. Omit it when no verification is known.</td></tr>
+                    <tr><td><code>superseded_by</code></td><td>Node ID</td><td>Names the replacement for a deprecated node.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <p>Treat node IDs as durable references. A paper-qualified ID such as <code>matrix-method.heuberger-matrix</code> stays fixed when the file is reorganized. Within one paper, use these stable IDs in <code>requires</code>; the <code>paper-id::node-id</code> spelling is reserved for future cross-paper dependencies.</p>
+              <aside class="documentation-note"><strong>Metadata presentation.</strong> Kind, status, subject tags, AI assistance, and Lean verification are intended to appear as compact badges. Longer provenance belongs in a metadata detail view.</aside>
+
+              <h3>Content conventions</h3>
+              <ul>
+                <li>Put one coherent idea in each file: a definition, a complete example, a construction, or a result together with its proof.</li>
+                <li>Begin the prose directly after the frontmatter. Do not add a <code>Main Content</code> heading; the interface already displays <code>title</code>.</li>
+                <li>Use <code>$...$</code> for inline mathematics and <code>\[...\]</code> or <code>$$...$$</code> for display mathematics.</li>
+                <li>Write <code>[[example-paper.chromatic-number]]</code> to display another node's title, or <code>[[example-paper.chromatic-number|chromatic number]]</code> to supply a custom label.</li>
+              </ul>
+
+              <h3>Complete node example</h3>
+              <pre class="documentation-code"><code>---
+id: example-paper.homomorphism-chromatic-number
+title: Homomorphisms and chromatic number
+kind: lemma
+requires:
+  - example-paper.graph-homomorphism
+  - example-paper.chromatic-number
+status: reviewed
+tags:
+  - graph theory
+source:
+  section: graph-homomorphisms
+  label: lem:hom-bound
+ai_assistance:
+  level: copyediting
+  human_reviewed: true
+---
+
+If there is a graph homomorphism from $X$ to $Y$, then
+\[\chi(X) \leq \chi(Y).\]
+
+This uses [[example-paper.graph-homomorphism]] and
+[[example-paper.chromatic-number|the chromatic number]].
+
+## Proof
+
+Pull a proper coloring of $Y$ back through the homomorphism.</code></pre>
+            </section>
+
+            <section id="docs-demos">
+              <p class="documentation-eyebrow">Interactive documents</p>
+              <h2>Inline HTML and JavaScript demonstrations</h2>
+              <p>Node bodies support ordinary Markdown together with raw HTML. A node may contain controls, Canvas, SVG, tables, or any other browser element. Inline scripts execute when the node is rendered, and scripts or stylesheets beneath <code>demos/</code> can be referenced with paper-root-relative paths.</p>
+              <pre class="documentation-code"><code>&lt;div id="coloring-demo"&gt;
+  &lt;label&gt;Vertices &lt;input type="range" min="3" max="30" value="8"&gt;&lt;/label&gt;
+  &lt;canvas width="720" height="420"&gt;&lt;/canvas&gt;
+&lt;/div&gt;
+
+&lt;link rel="stylesheet" href="demos/graph-coloring.css"&gt;
+&lt;script src="demos/graph-coloring.js"&gt;&lt;/script&gt;</code></pre>
+              <p>The script runs after the node HTML has entered the document, so it can select and modify the node's elements directly. Paper-local scripts do not receive a MathTrace context object. Do not wrap them in a <code>DOMContentLoaded</code> listener because the main page has already loaded.</p>
+              <p>For browser modules, add <code>type="module"</code> to the entry-point script and use relative imports to files vendored beneath <code>demos/</code>. For example, <code>import * as THREE from "./vendor/three.module.min.js";</code>. Bare package imports are not resolved. Relative module paths are rebuilt from the locally opened paper, so the demonstration remains self-contained and works offline. Retain license and version notices for vendored dependencies.</p>
+              <p>Short demonstrations may use inline <code>&lt;style&gt;</code> and <code>&lt;script&gt;</code> elements. Larger demonstrations should keep JavaScript and CSS under <code>demos/</code> so the mathematical prose remains readable. Scope CSS selectors and element IDs to the demonstration to avoid collisions with the interface or another open node.</p>
+              <aside class="documentation-note"><strong>Trusted documents.</strong> HTML and JavaScript execute with the same browser access as the viewer. MathTrace reads papers locally and does not upload them, but users should open executable papers only from sources they trust.</aside>
+            </section>
+
+            <section id="docs-paper-file">
+              <p class="documentation-eyebrow">File reference</p>
+              <h2>Writing mathtrace.paper.md</h2>
+              <p>This required top-level manifest represents the paper as a whole. It is displayed whenever the collapsed paper card is selected; it is not a graph node and has no dependencies. It also replaces the former <code>mathtrace.init.yaml</code> file by carrying node-discovery and layout settings.</p>
+
+              <h3>Required frontmatter</h3>
+              <div class="documentation-table-wrap">
+                <table class="documentation-table">
+                  <thead><tr><th scope="col">Attribute</th><th scope="col">Type</th><th scope="col">Use</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>format</code></td><td>Exact string</td><td>Must be <code>mathtrace-paper</code>; identifies the document schema.</td></tr>
+                    <tr><td><code>version</code></td><td>Positive integer</td><td>Selects the paper schema version. Use <code>2</code> for the manifest-only format.</td></tr>
+                    <tr><td><code>id</code></td><td>Nonempty string</td><td>Stable identity for the paper, independent of its folder name. This will serve as the paper namespace for cross-paper dependencies.</td></tr>
+                    <tr><td><code>title</code></td><td>Nonempty string</td><td>Full display title used on the paper card and overview.</td></tr>
+                    <tr><td><code>graph</code></td><td>Mapping</td><td>Contains graph-source settings.</td></tr>
+                    <tr><td><code>graph.nodeDirectory</code></td><td>Safe relative directory</td><td>Directory recursively searched for node Markdown files. Use <code>nodes</code> unless the project needs another name.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <h3>Optional frontmatter</h3>
+              <div class="documentation-table-wrap">
+                <table class="documentation-table">
+                  <thead><tr><th scope="col">Attribute</th><th scope="col">Type</th><th scope="col">Use</th></tr></thead>
+                  <tbody>
+                    <tr><td><code>authors</code></td><td>List of names or author mappings</td><td>Displays the paper's authors. A mapping requires <code>name</code> and may include <code>affiliation</code> and <code>orcid</code>.</td></tr>
+                    <tr><td><code>date</code></td><td>Nonempty string</td><td>Human-readable publication or draft date displayed on the paper card.</td></tr>
+                    <tr><td><code>status</code></td><td>Nonempty string</td><td>Describes the paper state, for example <code>draft</code>, <code>preprint</code>, <code>submitted</code>, or <code>published</code>.</td></tr>
+                    <tr><td><code>keywords</code></td><td>List of strings</td><td>Records subjects for discovery and future filtering.</td></tr>
+                    <tr><td><code>source</code></td><td>Mapping</td><td>Open provenance metadata such as <code>doi</code>, <code>arxiv</code>, <code>journal</code>, <code>url</code>, or an original filename.</td></tr>
+                    <tr><td><code>layout</code></td><td>Mapping</td><td>Controls graph layout. Common fields are <code>engine</code>, <code>algorithm</code>, <code>direction</code>, and <code>nodePlacementStrategy</code>.</td></tr>
+                    <tr><td><code>bundling</code></td><td>Mapping</td><td>Low-level compatibility settings for graph simplification. Papers themselves cannot contain other papers.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>The body accepts the same Markdown, mathematics, and node-link syntax as ordinary nodes. Headings such as Abstract, Introduction, and Conclusion are conventional rather than reserved.</p>
+
+              <h3>Complete paper example</h3>
+              <pre class="documentation-code"><code>---
+format: mathtrace-paper
+version: 2
+id: example-paper
+title: "An Example MathTrace Paper"
+authors:
+  - name: Ada Example
+    affiliation: Example University
+    orcid: 0000-0000-0000-0000
+  - Emmy Example
+date: "2026"
+status: preprint
+keywords:
+  - graph theory
+  - chromatic number
+source:
+  arxiv: "2601.01234"
+  doi: 10.0000/example
+graph:
+  nodeDirectory: nodes
+layout:
+  engine: elk
+  algorithm: layered
+  direction: DOWN
+  nodePlacementStrategy: NETWORK_SIMPLEX
+---
+
+## Abstract
+
+This paper studies a family of graph colorings.
+
+## Introduction
+
+The main result is [[main-theorem]].
+
+## Conclusion
+
+We conclude with several open questions.</code></pre>
+            </section>
+
+            <section id="docs-authoring">
+              <p class="documentation-eyebrow">Structural authorship</p>
+              <h2>Choose idea-sized nodes</h2>
+              <p>A good node is the smallest chunk that still expresses a complete mathematical idea. The purpose of the dependency graph is to separate and distill the paper's structure, not to maximize the number of nodes.</p>
+              <ul>
+                <li>Keep a theorem, lemma, proposition, or corollary with its proof unless the proof contains a genuinely reusable intermediate result.</li>
+                <li>Keep several definitions together when the paper introduces them as one inseparable piece of setup.</li>
+                <li>Let exposition span several paragraphs when those paragraphs form one narrative structure.</li>
+                <li>Do not split mechanically at paragraphs, sections, list items, or LaTeX environment boundaries.</li>
+                <li>Move title, abstract, introduction, conclusion, acknowledgments, and broad motivation to <code>mathtrace.paper.md</code>. Short transitions need not become nodes.</li>
+              </ul>
+              <p>Use the rendered graph as an editorial test. Its major routes should correspond to the conceptual stages of the paper. If it is noisy, look first for fragments that only make sense together. If a hidden intermediate result is independently reusable, give it its own node.</p>
+              <aside class="documentation-note"><strong>Matrix Methods.</strong> Its revised trace uses broader idea-sized nodes and separates applications into their own ID path. Use the rendered graph—not paragraph count—as the test for useful granularity.</aside>
+            </section>
+
+            <section id="docs-ai-conversion">
+              <p class="documentation-eyebrow">Existing papers</p>
+              <h2>Convert LaTeX into native MathTrace files</h2>
+              <p>Tagged LaTeX is no longer the recommended interchange format. An AI-assisted conversion should read the complete source paper and produce an ordinary MathTrace folder containing <code>mathtrace.paper.md</code> and node Markdown.</p>
+              <h3>Conversion sequence</h3>
+              <ol>
+                <li>Read the entire paper before deciding where nodes begin and end.</li>
+                <li>Extract paper-level metadata and prose into <code>mathtrace.paper.md</code>.</li>
+                <li>Draft coherent mathematical units; combine each result with its proof and merge inseparable setup.</li>
+                <li>Assign stable paper-qualified IDs, descriptive titles, lowercase kinds, and an explicit <code>requires</code> list to every node.</li>
+                <li>Infer direct prerequisites from definitions, notation, constructions, citations, labels, references, and proof use—not only explicit <code>\ref</code> commands.</li>
+                <li>Render the graph and revise the segmentation until it communicates the paper's architecture.</li>
+                <li>Compare every node with the original source and record human review.</li>
+              </ol>
+              <h3>Fidelity rules</h3>
+              <ul>
+                <li>Preserve the original claims, formulas, hypotheses, prose meaning, and proof logic.</li>
+                <li>Do not silently repair, strengthen, weaken, or complete an argument.</li>
+                <li>Do not invent citations, verification, bibliographic data, or mathematical dependencies.</li>
+                <li>Record source locations and surface uncertainty for human review.</li>
+                <li>Use structured <code>ai_assistance</code> metadata for material AI work.</li>
+              </ul>
+            </section>
+
+            <section id="docs-node-editing">
+              <h2>Creating and editing nodes</h2>
+              <p>Select an ordinary graph node and choose <strong>Edit node</strong> in the content-panel header. The complete Markdown file—including its YAML frontmatter—opens as source in the left panel. Choose <strong>Create node</strong> in the dependency-panel header to open a validated starter template.</p>
+              <dl class="documentation-actions">
+                <div><dt>Markdown-only edit</dt><dd>Saving a body-only change rerenders the selected content without laying out the graph again.</dd></div>
+                <div><dt>Frontmatter edit</dt><dd>Changing <code>id</code>, <code>kind</code>, <code>title</code>, <code>requires</code>, or other frontmatter validates and redraws the graph while preserving its view state.</dd></div>
+                <div><dt>Create node</dt><dd>New files are placed beneath <code>nodes/newly-added/</code> (or the configured node directory's <code>newly-added/</code> subfolder). Their stable IDs remain independent of that temporary organizational location.</dd></div>
+                <div><dt>Delete node</dt><dd>A confirmation dialog lists every direct dependent. Delete anyway removes the deleted ID from dependent <code>requires</code> lists and replaces matching wikilinks with <code>[[deleted reference]]</code>.</dd></div>
+                <div><dt>Validate</dt><dd>Save is rejected without changing the project if frontmatter is invalid, an ID or path conflicts, a prerequisite is missing, or dependencies form a cycle.</dd></div>
+              </dl>
+              <p>The source editor highlights mathematics delimited by <code>$...$</code>, <code>$$...$$</code>, <code>\(...\)</code>, or <code>\[...\]</code> in green. Highlighting is visual only and never changes the Markdown source.</p>
+              <p>Renaming a node automatically migrates its dependency references, internal <code>[[node.id]]</code> links, and paper-overview links while retaining the node file's existing path.</p>
+              <p><strong>Save</strong> validates and applies the source, <strong>Delete</strong> previews the dependency impact before removal, and <strong>Cancel</strong> discards the draft immediately. Escape asks before discarding unsaved source. <kbd>Ctrl</kbd>/<kbd>Command</kbd>+<kbd>S</kbd> also validates and saves. Changes remain in browser memory until the paper is downloaded from the <strong>Papers</strong> menu.</p>
+            </section>
+
+            <section id="docs-paper-workspace">
+              <h2>Flat papers in a shared workspace</h2>
+              <p>Each uploaded MathTrace folder becomes one paper card. The paper contains every ordinary node produced from that source and cannot contain another paper.</p>
+              <dl class="documentation-actions">
+                <div><dt>First selection</dt><dd>Selecting a collapsed paper card displays its <code>mathtrace.paper.md</code> overview in the right panel.</dd></div>
+                <div><dt>Second selection</dt><dd>Selecting the already-selected card expands the paper's complete dependency graph in a movable paper window.</dd></div>
+                <div><dt>Multiple papers</dt><dd>Several paper windows may remain expanded at the same time. They pan and zoom with the shared workspace and can be dragged independently.</dd></div>
+                <div><dt>Collapse</dt><dd>Only the red close button in a paper's window bar collapses that paper. Clicking its card again never closes it.</dd></div>
+              </dl>
+              <p>The <strong>Papers</strong> menu lists every paper by ID and marks it <strong>Edited</strong> or <strong>Unedited</strong>. Use its <strong>Download</strong> button to save a ZIP containing <code>mathtrace.paper.md</code>, <code>nodes/</code>, and the optional <code>demos/</code> directory. Existing node paths are preserved; files created in the browser remain beneath <code>nodes/newly-added/</code>. Use <strong>Add paper</strong> to load another folder.</p>
+            </section>
+
+            <section id="docs-viewer">
+              <h2>Using the viewer</h2>
+              <h3>Paper and graph views</h3>
+              <p>The collapsed paper card represents the paper as a whole. Select it once to display <code>mathtrace.paper.md</code> and select it again to reveal the complete graph inside its paper window. Use the red close button to collapse that paper without affecting any other expanded paper.</p>
+              <dl class="documentation-actions">
+                <div><dt>Select</dt><dd>Click a node to read it and highlight its direct prerequisites and dependents.</dd></div>
+                <div><dt>Pan</dt><dd>Drag empty graph space to move all paper cards and open paper windows together. Drag anywhere inside one paper window to reposition that window independently.</dd></div>
+                <div><dt>Zoom</dt><dd>Use a wheel or trackpad gesture. Zoom is centered at the pointer.</dd></div>
+                <div><dt>Fit</dt><dd>Adjust zoom and position so every paper card and every expanded paper window fits inside the panel.</dd></div>
+                <div><dt>Paper overview</dt><dd>Select the collapsed paper card to display its paper-level Markdown.</dd></div>
+                <div><dt>Expand node</dt><dd>Let the selected node cover both panels for large figures and interactive demonstrations. Choose <strong>Shrink node</strong> to restore the split view.</dd></div>
+                <div><dt>Hide content</dt><dd>Reveal the graph area behind the right panel without changing the graph transform.</dd></div>
+              </dl>
+            </section>
+
+            <section id="docs-validation">
+              <h2>Validation and local-file privacy</h2>
+              <p>Before drawing a native paper, MathTrace verifies paper metadata, node frontmatter types, unique node IDs, existing dependencies, and an acyclic node dependency graph.</p>
+              <p>The viewer reads selected MathTrace folders inside the browser. The interface does not upload paper files. Node edits remain in browser memory until you explicitly download them. Because node HTML and JavaScript are executable, only open papers from sources you trust.</p>
+            </section>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="paper-dialog" id="paper-dialog" aria-label="Open a MathTrace paper">
+      <div class="paper-dialog-card">
+        <button
+          class="dialog-close-button"
+          id="close-paper-dialog"
+          type="button"
+          aria-label="Close dialog"
+          title="Close"
+        >&times;</button>
+
+        <button class="choose-source-button" id="open-mathtrace-folder" type="button">Open MathTrace folder</button>
+        <p class="privacy-note">Your files will be read locally and will not be uploaded.</p>
+        <p class="trusted-paper-warning">MathTrace papers can contain executable HTML and JavaScript. Only open papers from sources you trust.</p>
+        <p class="dialog-status" id="dialog-status" role="status" aria-live="polite"></p>
+      </div>
+    </dialog>
+
+    <dialog
+      class="bundle-editor-dialog"
+      id="bundle-editor-dialog"
+      aria-labelledby="bundle-editor-title"
+      aria-describedby="bundle-selection-help"
+    >
+      <form class="bundle-editor-card" id="bundle-editor-form" novalidate>
+        <header class="bundle-editor-header">
+          <div>
+            <p class="dialog-kicker">Bundle manager</p>
+            <h2 id="bundle-editor-title">Create bundle</h2>
+          </div>
+          <button
+            class="dialog-close-button"
+            id="close-bundle-editor"
+            type="button"
+            aria-label="Close bundle editor"
+            title="Close"
+          >&times;</button>
+        </header>
+
+        <div class="bundle-editor-fields">
+          <label class="bundle-field">
+            <span>Bundle name</span>
+            <input id="bundle-title" name="bundle-title" type="text" maxlength="100" autocomplete="off" required>
+          </label>
+
+          <label class="bundle-field">
+            <span>Bundle ID</span>
+            <input id="bundle-id" name="bundle-id" type="text" maxlength="120" spellcheck="false" autocomplete="off" required>
+            <small>Starts with <code>bundle.</code>; use lowercase letters, numbers, dots, and hyphens.</small>
+          </label>
+
+          <label class="bundle-collapse-setting">
+            <input id="bundle-collapsed" name="bundle-collapsed" type="checkbox" checked>
+            <span>Show this as a collapsed bundle node</span>
+          </label>
+
+          <section class="bundle-node-picker" aria-labelledby="bundle-node-picker-heading">
+            <div class="bundle-node-picker-heading">
+              <div>
+                <h3 id="bundle-node-picker-heading">Member nodes</h3>
+                <output id="bundle-selected-count">0 selected</output>
+              </div>
+              <input id="bundle-node-filter" type="search" placeholder="Filter nodes" aria-label="Filter member nodes">
+            </div>
+            <p class="bundle-selection-help" id="bundle-selection-help">
+              Click nodes or bundles in the graph, or select them from these lists. Selecting a bundle stages all of its members for the new bundle.
+            </p>
+            <section class="bundle-absorb-section" id="bundle-absorb-section" aria-labelledby="bundle-absorb-heading">
+              <div class="bundle-absorb-heading">
+                <h4 id="bundle-absorb-heading">Existing bundles</h4>
+                <span>Selected bundles are replaced only after a successful save.</span>
+              </div>
+              <div class="bundle-absorb-list" id="bundle-absorb-list"></div>
+            </section>
+            <div class="bundle-node-list" id="bundle-node-list"></div>
+          </section>
+        </div>
+
+        <p class="bundle-editor-status" id="bundle-editor-status" role="alert" aria-live="polite"></p>
+
+        <footer class="bundle-editor-footer">
+          <button class="bundle-delete-button" id="delete-bundle" type="button" hidden>Delete bundle</button>
+          <span class="bundle-editor-footer-spacer"></span>
+          <button class="bundle-secondary-button" id="cancel-bundle-editor" type="button">Cancel</button>
+          <button class="bundle-save-button" id="save-bundle" type="submit">Create bundle</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog
+      class="paper-dialog node-delete-dialog"
+      id="node-delete-dialog"
+      aria-labelledby="node-delete-title"
+      aria-describedby="node-delete-description"
+    >
+      <div class="paper-dialog-card node-delete-card">
+        <p class="dialog-kicker">Delete node</p>
+        <h2 id="node-delete-title">Delete this node?</h2>
+        <p class="node-delete-description" id="node-delete-description">
+          You are about to delete <strong id="node-delete-name"></strong>
+          <code id="node-delete-id"></code> from the working project.
+        </p>
+
+        <section class="node-delete-impact" aria-labelledby="node-delete-dependents-heading">
+          <h3 id="node-delete-dependents-heading">Nodes requiring this node</h3>
+          <p id="node-delete-dependent-summary"></p>
+          <ul id="node-delete-dependent-list"></ul>
+        </section>
+
+        <p class="node-delete-note" id="node-delete-wikilink-note" hidden></p>
+        <p class="node-delete-note" id="node-delete-bundle-note" hidden></p>
+        <p class="node-delete-note" id="node-delete-draft-note" hidden></p>
+        <p class="node-delete-warning">
+          Delete anyway removes this requirement from the affected frontmatter and replaces matching wikilinks with <code>[[deleted reference]]</code>.
+        </p>
+
+        <footer class="node-delete-actions">
+          <button class="node-delete-cancel" id="cancel-node-delete" type="button">Cancel</button>
+          <button class="node-delete-confirm" id="confirm-node-delete" type="button">Delete anyway</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <input id="paper-folder-input" type="file" webkitdirectory multiple hidden>
+  </body>
+</html>
