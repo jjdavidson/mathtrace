@@ -14,14 +14,18 @@ The interface repository contains the viewer and protocol documentation. MathTra
 
 The same core guide is available from the interface's **Documentation** button.
 
-Interface v54 opens with a MathTrace welcome, leads its documentation with the
-project philosophy, and includes a visual example of compact node-metadata
-badges. It retains v53's independent camera state for the cross-paper graph:
-ordinary paper navigation restores the saved pan and zoom, while a new paper
-or changed cross-paper dependency rebuilds and fits the workspace.
-The minimal manifest, arXiv author links, and dashed imported nodes from v51
-remain supported.
+Interface v55 adds paper removal to the cross-paper dependency graph. Each paper node has a red delete control, and MathTrace asks for confirmation while reporting whether the paper contains in-browser edits. Removing a paper affects only the current browser workspace and does not modify its source folder.
+
+It retains v54's MathTrace welcome, project-philosophy documentation, compact metadata-badge example, and independent camera state for the cross-paper graph. Ordinary paper navigation restores the saved pan and zoom, while a new paper or changed cross-paper dependency rebuilds and fits the workspace. The minimal manifest, arXiv author links, and dashed imported nodes from v51 remain supported.
 
 ## Updating a release
 
 Release archives are complete snapshots and should be extracted into their own versioned directory. Do not merge a new archive over an older extracted directory: archive extraction replaces files with matching names but does not delete node files retired by a newer version.
+
+## License
+
+Original MathTrace source code and documentation are licensed under the [MIT License](LICENSE).
+
+Third-party libraries in [`viewer/vendor/`](viewer/vendor/) remain under their respective licenses. See [`viewer/vendor/README.md`](viewer/vendor/README.md) and the accompanying license files.
+
+MathTrace papers are independent works and are not automatically covered by this repository's MIT License. Each paper repository should state its own licensing terms.
