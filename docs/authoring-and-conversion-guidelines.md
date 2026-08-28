@@ -53,7 +53,7 @@ Do not add an edge merely because two topics are nearby or thematically related.
 4. Combine each result with its proof and merge inseparable setup.
 5. Assign stable paper-qualified IDs, titles, and lowercase kinds. Keep IDs independent of folder placement.
 6. Infer direct `requires` lists.
-7. Add node discovery and layout settings to `mathtrace.paper.md`, then render the graph.
+7. Give `mathtrace.paper.md` only its paper ID, title, and authors, then render the graph.
 8. Review the graph as a structural outline: merge noise, split genuinely reusable ideas, and correct dependencies.
 9. Compare every node with the source and record human review.
 

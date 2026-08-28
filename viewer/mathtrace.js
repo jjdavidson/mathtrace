@@ -47,6 +47,7 @@ const createNodeButton = document.querySelector("#create-node");
 const expandNodeButton = document.querySelector("#expand-node");
 const editNodeButton = document.querySelector("#edit-node");
 const deleteNodeButton = document.querySelector("#delete-node");
+const closePaperButton = document.querySelector("#close-paper");
 const nodeDeleteDialog = document.querySelector("#node-delete-dialog");
 const nodeDeleteName = document.querySelector("#node-delete-name");
 const nodeDeleteId = document.querySelector("#node-delete-id");
@@ -57,15 +58,12 @@ const nodeDeleteBundleNote = document.querySelector("#node-delete-bundle-note");
 const nodeDeleteDraftNote = document.querySelector("#node-delete-draft-note");
 const cancelNodeDeleteButton = document.querySelector("#cancel-node-delete");
 const confirmNodeDeleteButton = document.querySelector("#confirm-node-delete");
-const paperCardView = document.querySelector("#paper-card-view");
-const paperCardId = document.querySelector("#paper-card-id");
-const paperCardTitle = document.querySelector("#paper-card-title");
-const paperCardAuthors = document.querySelector("#paper-card-authors");
-const paperCardStatus = document.querySelector("#paper-card-status");
-const paperCardDate = document.querySelector("#paper-card-date");
-const paperCardNodeCount = document.querySelector("#paper-card-node-count");
-const paperCardBundleCount = document.querySelector("#paper-card-bundle-count");
-const expandPaperButton = document.querySelector("#expand-paper-button");
+const paperDeleteDialog = document.querySelector("#paper-delete-dialog");
+const paperDeleteName = document.querySelector("#paper-delete-name");
+const paperDeleteId = document.querySelector("#paper-delete-id");
+const paperDeleteEditStatus = document.querySelector("#paper-delete-edit-status");
+const cancelPaperDeleteButton = document.querySelector("#cancel-paper-delete");
+const confirmPaperDeleteButton = document.querySelector("#confirm-paper-delete");
 const contentHeading = document.querySelector("#content-heading");
 const nodeReader = document.querySelector("#node-reader");
 const readerStatusTitle = document.querySelector("#reader-status-title");
@@ -102,10 +100,18 @@ const mathTraceState = {
   nodeDeletion: {
     nodeId: null,
   },
+  paperDeletion: {
+    projectInstanceId: null,
+  },
   linkedPreview: {
     nodeId: null,
   },
+  viewMode: "workspace",
   workspaceGraph: null,
+  workspaceGraphViewState: null,
+  workspaceGraphNeedsFit: false,
+  paperGraph: null,
+  currentGraph: null,
 };
 
 function openPaperDialog() {
@@ -173,7 +179,7 @@ function setNodeExpanded(isExpanded) {
     && !contentPanel.hasAttribute("hidden");
   mathTraceState.nodeExpanded = expanded;
   workspace.classList.toggle("is-node-expanded", expanded);
-  expandNodeButton.textContent = expanded ? "Shrink node" : "Expand node";
+  expandNodeButton.textContent = expanded ? "Shrink panel" : "Expand panel";
   expandNodeButton.title = expanded
     ? "Restore the dependency graph and node split view"
     : "Let the selected node cover both panels";
@@ -209,84 +215,85 @@ function activeProject() {
   ) || null;
 }
 
+function paperIsOpen(project = activeProject()) {
+  return Boolean(project) && mathTraceState.viewMode === "paper";
+}
+
 function projectByInstanceId(instanceId) {
   return mathTraceState.projects.find((project) => project.instanceId === instanceId) || null;
+}
+
+function paperDeleteControl(projectInstanceId) {
+  return Array.from(graphSurface.querySelectorAll(".graph-paper-delete-control"))
+    .find((control) => control.dataset.projectInstanceId === projectInstanceId) || null;
 }
 
 function paperContainerId(project) {
   return `paper:${project.instanceId}`;
 }
 
-function workspaceNodeId(project, nodeId) {
-  return `node:${project.instanceId}:${nodeId}`;
+function isNativeNodeId(paperId, nodeId) {
+  return nodeId.startsWith(`${paperId}.`);
 }
 
 function buildWorkspaceGraph() {
-  const nodes = [];
-  const edges = [];
-  const papers = [];
+  return MathTraceProjectModel.buildPaperDependencyGraph(mathTraceState.projects);
+}
 
-  for (const project of mathTraceState.projects) {
-    const localId = (nodeId) => workspaceNodeId(project, nodeId);
-
-    for (const node of project.graph.nodes) {
-      nodes.push({
-        ...node,
-        id: localId(node.id),
-        originalId: node.id,
-        projectInstanceId: project.instanceId,
-        requires: node.requires.map(localId),
-      });
-    }
-
-    project.graph.edges.forEach((edge, index) => {
-      edges.push({
-        ...edge,
-        id: `workspace-edge:${project.instanceId}:${index}`,
-        source: localId(edge.source),
-        target: localId(edge.target),
-        projectInstanceId: project.instanceId,
-      });
-    });
-
-    const members = project.graph.nodes.map((node) => localId(node.id));
-
-    if (members.length > 0) {
-      papers.push({
-        id: paperContainerId(project),
-        kind: "paper",
-        title: project.paper.title,
-        representative: members[0],
-        collapsed: true,
-        members,
-        paperId: project.paper.id,
-        paper: project.paper,
-        projectInstanceId: project.instanceId,
-      });
-    }
+function crossPaperDependenciesChanged() {
+  if (!mathTraceState.workspaceGraph) {
+    return true;
   }
 
+  const previousSignature = MathTraceProjectModel.paperDependencyGraphSignature(
+    mathTraceState.workspaceGraph,
+  );
+  const nextSignature = MathTraceProjectModel.paperDependencyGraphSignature(
+    buildWorkspaceGraph(),
+  );
+  return previousSignature !== nextSignature;
+}
+
+function markWorkspaceGraphForFitIfChanged() {
+  if (crossPaperDependenciesChanged()) {
+    mathTraceState.workspaceGraphNeedsFit = true;
+  }
+}
+
+function workspaceReturnState() {
+  return mathTraceState.workspaceGraphNeedsFit || crossPaperDependenciesChanged()
+    ? null
+    : mathTraceState.workspaceGraphViewState;
+}
+
+function buildPaperGraph(project) {
+  const nodes = project.graph.nodes.map((node) => {
+    const isImported = !isNativeNodeId(project.paper.id, node.id);
+    return {
+      ...node,
+      originalId: node.id,
+      paperId: project.paper.id,
+      isImported,
+      sourcePaperId: isImported ? node.id.split(".", 1)[0] : project.paper.id,
+      projectInstanceId: project.instanceId,
+    };
+  });
+
   return {
+    ...project.graph,
     nodes,
     nodeById: new Map(nodes.map((node) => [node.id, node])),
-    edges,
-    bundles: papers,
-    layout: {
-      algorithm: "layered",
-      direction: "DOWN",
-      nodePlacementStrategy: "NETWORK_SIMPLEX",
-    },
-    bundling: {
-      removeInternalEdges: true,
-      deduplicateExternalEdges: true,
-      rejectCyclesAfterBundling: false,
-    },
+    edges: project.graph.edges.map((edge) => ({ ...edge })),
+    bundles: project.working.bundles.map((bundle) => ({
+      ...bundle,
+      members: [...bundle.members],
+    })),
   };
 }
 
-function selectedWorkspaceNode() {
+function selectedGraphNode() {
   const selectedId = MathTraceGraphView.getState()?.selectedNodeId;
-  return selectedId ? mathTraceState.workspaceGraph?.nodeById.get(selectedId) || null : null;
+  return selectedId ? mathTraceState.currentGraph?.nodeById.get(selectedId) || null : null;
 }
 
 function showNodeEditorStatus(message, isError = false) {
@@ -306,17 +313,17 @@ function syncNodeSourceHighlightScroll() {
 }
 
 function selectedEditableNode(project = activeProject()) {
-  if (!project) {
+  if (!project || mathTraceState.viewMode !== "paper") {
     return null;
   }
 
-  const selected = selectedWorkspaceNode();
+  const selected = selectedGraphNode();
 
   if (!selected || selected.projectInstanceId !== project.instanceId) {
     return null;
   }
 
-  return project.graph.nodeById.get(selected.originalId) || null;
+  return project.graph.nodeById.get(selected.originalId || selected.id) || null;
 }
 
 function updateNodeActionButtons(node = selectedEditableNode()) {
@@ -399,7 +406,10 @@ async function openLinkedNodePreview(nodeId) {
 }
 
 function restoreGraphPanelHeading() {
-  graphHeading.textContent = "Dependency Graph";
+  const project = activeProject();
+  graphHeading.textContent = paperIsOpen(project)
+    ? `Dependency Graph · ${project.paper.id}`
+    : "Paper Dependency Graph";
 }
 
 function nodeEditorIsDirty() {
@@ -446,7 +456,7 @@ function closeNodeEditor({ discard = false, restoreFocus = true } = {}) {
   deleteNodeButton.setAttribute("disabled", "");
   showNodeEditorStatus("");
   restoreGraphPanelHeading();
-  createNodeButton.toggleAttribute("disabled", !activeProject());
+  createNodeButton.toggleAttribute("disabled", !paperIsOpen());
   updateNodeActionButtons();
 
   if (restoreFocus) {
@@ -459,7 +469,7 @@ function closeNodeEditor({ discard = false, restoreFocus = true } = {}) {
 function openNodeEditor({ mode, node = null, path, text }) {
   const project = activeProject();
 
-  if (!project) {
+  if (!paperIsOpen(project)) {
     return;
   }
 
@@ -499,7 +509,7 @@ function openNodeEditor({ mode, node = null, path, text }) {
 function openCreateNodeEditor() {
   const project = activeProject();
 
-  if (!project) {
+  if (!paperIsOpen(project)) {
     return;
   }
 
@@ -632,6 +642,116 @@ function showDeletedNodeStatus(result) {
   nodeReader.replaceChildren(status);
 }
 
+function closePaperDeleteDialog({ restoreFocus = true } = {}) {
+  const projectInstanceId = mathTraceState.paperDeletion.projectInstanceId;
+
+  if (paperDeleteDialog.open) {
+    paperDeleteDialog.close();
+  }
+
+  mathTraceState.paperDeletion.projectInstanceId = null;
+  cancelPaperDeleteButton.removeAttribute("disabled");
+  confirmPaperDeleteButton.removeAttribute("disabled");
+  confirmPaperDeleteButton.textContent = "Delete paper";
+
+  if (restoreFocus && projectInstanceId) {
+    paperDeleteControl(projectInstanceId)?.focus({ preventScroll: true });
+  }
+}
+
+function openPaperDeleteDialog(project) {
+  if (!project || mathTraceState.viewMode !== "workspace") {
+    return;
+  }
+
+  const isEdited = MathTracePaperExport.hasChanges(project);
+  mathTraceState.paperDeletion.projectInstanceId = project.instanceId;
+  paperDeleteName.textContent = project.paper.title;
+  paperDeleteId.textContent = project.paper.id;
+  paperDeleteEditStatus.dataset.edited = String(isEdited);
+  paperDeleteEditStatus.textContent = isEdited
+    ? "Edited: this paper has in-browser changes. Deleting it will discard those changes unless you download the paper first."
+    : "Unedited: this paper has no in-browser changes."
+  paperDeleteDialog.showModal();
+  cancelPaperDeleteButton.focus({ preventScroll: true });
+}
+
+function showDeletedPaperStatus(project) {
+  contentHeading.textContent = "Paper deleted";
+  nodeReader.classList.add("is-empty");
+  nodeReader.classList.remove("has-content", "is-bundle", "is-paper-overview");
+  const status = document.createElement("div");
+  status.className = "empty-state";
+  const title = document.createElement("p");
+  title.className = "empty-state-title";
+  title.textContent = `${project.paper.title} was deleted`;
+  const description = document.createElement("p");
+  description.textContent = mathTraceState.projects.length === 0
+    ? "Add a paper to rebuild the cross-paper dependency graph."
+    : "Select another paper to continue.";
+  status.append(title, description);
+  nodeReader.replaceChildren(status);
+}
+
+async function confirmPaperDeletion() {
+  const projectInstanceId = mathTraceState.paperDeletion.projectInstanceId;
+  const project = projectByInstanceId(projectInstanceId);
+
+  if (!project) {
+    closePaperDeleteDialog({ restoreFocus: false });
+    return;
+  }
+
+  const wasActive = mathTraceState.activeProjectInstanceId === project.instanceId;
+  const projectIndex = mathTraceState.projects.indexOf(project);
+  const previousActiveProjectInstanceId = mathTraceState.activeProjectInstanceId;
+  cancelPaperDeleteButton.setAttribute("disabled", "");
+  confirmPaperDeleteButton.setAttribute("disabled", "");
+  confirmPaperDeleteButton.textContent = "Deleting…";
+
+  try {
+    mathTraceState.projects = mathTraceState.projects.filter(
+      (candidate) => candidate.instanceId !== project.instanceId,
+    );
+
+    if (wasActive) {
+      mathTraceState.activeProjectInstanceId = null;
+    }
+
+    mathTraceState.workspaceGraphViewState = null;
+    mathTraceState.workspaceGraphNeedsFit = true;
+    closeLinkedNodePreview({ restoreFocus: false });
+    setNodeExpanded(false);
+    await renderWorkspaceGraph({
+      showActiveOverview: !wasActive && Boolean(activeProject()),
+      state: null,
+    });
+    closePaperDeleteDialog({ restoreFocus: false });
+
+    if (wasActive) {
+      showDeletedPaperStatus(project);
+    }
+
+    graphSurface.focus({ preventScroll: true });
+  } catch (error) {
+    mathTraceState.projects.splice(projectIndex, 0, project);
+    mathTraceState.activeProjectInstanceId = previousActiveProjectInstanceId;
+    try {
+      await renderWorkspaceGraph({ showActiveOverview: Boolean(activeProject()) });
+    } catch (renderError) {
+      console.error("MathTrace could not restore the paper dependency graph.", renderError);
+    }
+    paperDeleteEditStatus.dataset.edited = "true";
+    paperDeleteEditStatus.textContent = error instanceof Error
+      ? error.message
+      : "The paper could not be deleted.";
+  } finally {
+    cancelPaperDeleteButton.removeAttribute("disabled");
+    confirmPaperDeleteButton.removeAttribute("disabled");
+    confirmPaperDeleteButton.textContent = "Delete paper";
+  }
+}
+
 async function confirmNodeDeletion() {
   const project = activeProject();
   const nodeId = mathTraceState.nodeDeletion.nodeId;
@@ -647,10 +767,10 @@ async function confirmNodeDeletion() {
 
   try {
     const result = MathTraceNodeEditor.deleteNode(project, nodeId);
+    markWorkspaceGraphForFitIfChanged();
     await refreshGraphAfterBundleChange(project, previousState);
     project.graphReaderMode = "overview";
     project.graphViewState = MathTraceGraphView.getState();
-    populatePaperCard(project);
     closeNodeDeleteDialog({ restoreFocus: false });
     closeNodeEditor({ discard: true, restoreFocus: false });
     showDeletedNodeStatus(result);
@@ -687,8 +807,7 @@ async function saveNodeEdits() {
       originalNodeId,
       text: savedText,
     });
-    populatePaperCard(project);
-
+    markWorkspaceGraphForFitIfChanged();
     await refreshGraphAfterBundleChange(project, previousState, result.node.id);
 
     mathTraceState.nodeEditor.originalText = savedText;
@@ -704,19 +823,6 @@ async function saveNodeEdits() {
       deleteNodeButton.removeAttribute("disabled");
     }
   }
-}
-
-function populatePaperCard(project) {
-  const { paper, graph } = project;
-  paperCardId.textContent = paper.id;
-  paperCardTitle.textContent = paper.title;
-  paperCardAuthors.textContent = paper.authors.length > 0
-    ? paper.authors.map((author) => author.name).join(", ")
-    : "Authors not specified";
-  paperCardStatus.textContent = paper.status || "Not specified";
-  paperCardDate.textContent = paper.date || "Not specified";
-  paperCardNodeCount.textContent = String(graph.nodes.length);
-  paperCardBundleCount.textContent = String(graph.bundles.length);
 }
 
 function closeBundleMenu({ restoreFocus = false } = {}) {
@@ -740,13 +846,13 @@ function openBundleMenu() {
 
 function updateBundleMenuState() {
   bundleMenuList.querySelectorAll(".bundle-menu-item").forEach((item) => {
-    const isExpanded = MathTraceGraphView.isBundleExpanded(item.dataset.nodeId);
     const isSelected = item.dataset.projectInstanceId === mathTraceState.activeProjectInstanceId;
-    item.classList.toggle("is-expanded", isExpanded);
+    const isOpen = isSelected && mathTraceState.viewMode === "paper";
+    item.classList.toggle("is-expanded", isOpen);
     item.classList.toggle("is-selected", isSelected);
     item.setAttribute("aria-current", isSelected ? "true" : "false");
     const expandedStatus = item.querySelector(".bundle-menu-expanded-status");
-    expandedStatus.toggleAttribute("hidden", !isExpanded);
+    expandedStatus.toggleAttribute("hidden", !isOpen);
   });
 }
 
@@ -788,7 +894,7 @@ function populateBundleMenu() {
     status.textContent = isEdited ? "Edited" : "Unedited";
     const expandedStatus = document.createElement("span");
     expandedStatus.className = "bundle-menu-expanded-status";
-    expandedStatus.textContent = "Expanded";
+    expandedStatus.textContent = "Open";
     expandedStatus.setAttribute("hidden", "");
     const statuses = document.createElement("span");
     statuses.className = "bundle-menu-statuses";
@@ -1023,49 +1129,110 @@ function openBundleEditor(bundleId = null) {
   bundleTitleInput.focus({ preventScroll: true });
 }
 
-async function refreshGraphAfterBundleChange(project, state, preferredNodeId = null) {
-  mathTraceState.workspaceGraph = buildWorkspaceGraph();
-  const paperIds = new Set(mathTraceState.workspaceGraph.bundles.map((paper) => paper.id));
-  const validExpandedIds = (state?.expandedBundleIds || [])
-    .filter((paperId) => paperIds.has(paperId));
-  const restorableSelection = state?.selectedNodeId && (
-    mathTraceState.workspaceGraph.nodeById.has(state.selectedNodeId)
-    || paperIds.has(state.selectedNodeId)
-  );
-  const safeState = state ? {
-    ...state,
-    selectedNodeId: restorableSelection ? state.selectedNodeId : null,
-    expandedBundleId: validExpandedIds[0] || null,
-    expandedBundleIds: validExpandedIds,
-    expandedBundlePositions: Object.fromEntries(
-      validExpandedIds
-        .filter((paperId) => state.expandedBundlePositions?.[paperId])
-        .map((paperId) => [paperId, state.expandedBundlePositions[paperId]]),
-    ),
-  } : null;
-  const view = await MathTraceGraphView.render({
+async function renderGraph(graph, state = null) {
+  mathTraceState.currentGraph = graph;
+  return MathTraceGraphView.render({
     surface: graphSurface,
     svg: dependencyGraph,
     viewport: graphViewport,
     toolbar: graphToolbar,
     emptyState: graphEmptyState,
-    graph: mathTraceState.workspaceGraph,
-    state: safeState,
+    graph,
+    state,
   });
-  mathTraceState.projects.forEach((candidate) => {
-    candidate.view = view;
-    candidate.graphViewState = MathTraceGraphView.getState();
-  });
-  populateBundleMenu();
+}
 
-  if (preferredNodeId) {
-    MathTraceGraphView.selectNodeById(workspaceNodeId(project, preferredNodeId));
+async function renderWorkspaceGraph({
+  showActiveOverview = true,
+  state = null,
+} = {}) {
+  mathTraceState.viewMode = "workspace";
+  mathTraceState.paperGraph = null;
+  mathTraceState.projects.forEach((project) => {
+    project.viewMode = "workspace";
+  });
+  closeLinkedNodePreview({ restoreFocus: false });
+  mathTraceState.workspaceGraph = buildWorkspaceGraph();
+  dependencyGraph.removeAttribute("hidden");
+  graphToolbar.removeAttribute("hidden");
+  bundleMenu.removeAttribute("hidden");
+  createNodeButton.setAttribute("hidden", "");
+  createNodeButton.setAttribute("disabled", "");
+  closePaperButton.setAttribute("hidden", "");
+  graphHeading.textContent = "Paper Dependency Graph";
+  graphSurface.setAttribute("aria-label", "Dependency graph of loaded MathTrace papers");
+  updateNodeActionButtons(null);
+  const view = await renderGraph(mathTraceState.workspaceGraph, state);
+  mathTraceState.workspaceGraphViewState = MathTraceGraphView.getState();
+  mathTraceState.workspaceGraphNeedsFit = false;
+  populateBundleMenu();
+  bundleMenuDescription.textContent = "Select a paper to read it; double-click its graph node to open it.";
+
+  if (mathTraceState.projects.length === 0) {
+    graphStatusTitle.textContent = "No papers loaded";
+    graphStatusDescription.textContent = "Add a paper to rebuild the cross-paper dependency graph.";
+    dependencyGraph.setAttribute("hidden", "");
+    graphToolbar.setAttribute("hidden", "");
+    graphEmptyState.removeAttribute("hidden");
+    graphSurface.classList.remove("has-graph");
   }
 
-  updateBundleMenuState();
-  createNodeButton.toggleAttribute("disabled", !activeProject());
-  restoreGraphPanelHeading();
+  const project = activeProject();
+
+  if (showActiveOverview && project) {
+    await showPaperOverview(project, { rememberGraphMode: false });
+  }
+
   return view;
+}
+
+async function renderOpenPaper(project, {
+  state = null,
+  preferredNodeId = null,
+  showOverview = true,
+} = {}) {
+  mathTraceState.activeProjectInstanceId = project.instanceId;
+  mathTraceState.viewMode = "paper";
+  mathTraceState.projects.forEach((candidate) => {
+    candidate.viewMode = candidate.instanceId === project.instanceId ? "paper" : "workspace";
+  });
+  mathTraceState.paperGraph = buildPaperGraph(project);
+  dependencyGraph.removeAttribute("hidden");
+  graphToolbar.removeAttribute("hidden");
+  bundleMenu.removeAttribute("hidden");
+  createNodeButton.removeAttribute("hidden");
+  createNodeButton.removeAttribute("disabled");
+  closePaperButton.removeAttribute("hidden");
+  graphHeading.textContent = `Dependency Graph · ${project.paper.id}`;
+  graphSurface.setAttribute("aria-label", `Dependency graph for ${project.paper.title}`);
+  const view = await renderGraph(mathTraceState.paperGraph, state);
+  project.graphViewState = MathTraceGraphView.getState();
+  populateBundleMenu();
+  bundleMenuDescription.textContent = `${project.paper.id} is open. Close it to return to paper dependencies.`;
+
+  if (preferredNodeId && MathTraceGraphView.selectNodeById(preferredNodeId)) {
+    return view;
+  }
+
+  updateNodeActionButtons(null);
+
+  if (showOverview) {
+    await showPaperOverview(project, { rememberGraphMode: false });
+  }
+
+  return view;
+}
+
+async function refreshGraphAfterBundleChange(project, state, preferredNodeId = null) {
+  if (paperIsOpen(project)) {
+    return renderOpenPaper(project, {
+      state,
+      preferredNodeId,
+      showOverview: false,
+    });
+  }
+
+  return renderWorkspaceGraph();
 }
 
 function normalizePath(path) {
@@ -1159,7 +1326,7 @@ async function readMathTraceFolder(fileList) {
 }
 
 async function showPaperOverview(project, { rememberGraphMode = true } = {}) {
-  if (rememberGraphMode && project.viewMode === "graph") {
+  if (rememberGraphMode && paperIsOpen(project)) {
     project.graphReaderMode = "overview";
   }
 
@@ -1173,70 +1340,61 @@ async function showPaperOverview(project, { rememberGraphMode = true } = {}) {
   });
 }
 
-async function setProjectViewMode(project, mode, { restoreReader = true } = {}) {
-  const isCard = mode === "card";
-
-  if (isCard) {
-    closeLinkedNodePreview({ restoreFocus: false });
+async function openPaper(project) {
+  if (!project || mathTraceState.viewMode !== "workspace") {
+    return;
   }
 
-  if (isCard && bundleEditorDialog.open) {
+  if (!nodeEditorView.hasAttribute("hidden") && !closeNodeEditor()) {
+    return;
+  }
+
+  if (bundleEditorDialog.open) {
     closeBundleEditor();
   }
 
-  project.viewMode = mode;
-  graphSurface.classList.toggle("is-paper-card", isCard);
-  paperCardView.toggleAttribute("hidden", !isCard);
-  dependencyGraph.toggleAttribute("hidden", isCard);
-  graphToolbar.toggleAttribute("hidden", isCard);
-  createNodeButton.toggleAttribute("hidden", isCard);
-  bundleMenu.toggleAttribute("hidden", isCard);
+  mathTraceState.workspaceGraphViewState = MathTraceGraphView.getState();
+  closeLinkedNodePreview({ restoreFocus: false });
+  setNodeExpanded(false);
+  await renderOpenPaper(project);
+  graphSurface.focus({ preventScroll: true });
+}
 
-  if (isCard) {
-    closeBundleMenu();
-    graphHeading.textContent = "Research paper";
-    graphSurface.setAttribute("aria-label", `Paper card for ${project.paper.title}`);
-    project.graphViewState = MathTraceGraphView.getState();
-    createNodeButton.setAttribute("disabled", "");
-    updateNodeActionButtons(null);
-    await showPaperOverview(project, { rememberGraphMode: false });
+async function closeOpenPaper() {
+  const project = activeProject();
+
+  if (!paperIsOpen(project)) {
     return;
   }
 
-  graphHeading.textContent = "Dependency Graph";
-  graphSurface.setAttribute("aria-label", `Dependency graph for ${project.paper.title}`);
-  createNodeButton.removeAttribute("disabled");
-
-  if (
-    restoreReader
-    && project.graphReaderMode === "node"
-    && project.graphViewState?.selectedNodeId
-    && MathTraceGraphView.selectNodeById(project.graphViewState.selectedNodeId)
-  ) {
+  if (!nodeEditorView.hasAttribute("hidden") && !closeNodeEditor()) {
     return;
   }
 
-  await showPaperOverview(project);
+  if (bundleEditorDialog.open) {
+    closeBundleEditor();
+  }
+
+  project.graphViewState = MathTraceGraphView.getState();
+  closeLinkedNodePreview({ restoreFocus: false });
+  setNodeExpanded(false);
+  await renderWorkspaceGraph({
+    showActiveOverview: false,
+    state: workspaceReturnState(),
+  });
+  MathTraceGraphView.selectNodeById(paperContainerId(project));
+  graphSurface.focus({ preventScroll: true });
 }
 
 async function displayLoadedProject(project) {
-  graphStatusTitle.textContent = "Laying out dependency graph…";
-  graphStatusDescription.textContent = "ELK is positioning the collapsed paper graph.";
+  graphStatusTitle.textContent = "Laying out paper dependencies…";
+  graphStatusDescription.textContent = "ELK is positioning the loaded papers.";
   readerStatusTitle.textContent = "Select a paper";
-  readerStatusDescription.textContent = project.paper.isFallback
-    ? `${project.paper.title} is ready, but no mathtrace.paper.md was supplied.`
-    : `${project.paper.title} is ready. Select its paper card once to read mathtrace.paper.md and again to expand its dependency graph.`;
-  showDialogStatus("The paper is valid. Laying out the dependency graph…");
+  readerStatusDescription.textContent = `${project.paper.title} is ready. Select its paper node to read the overview or double-click it to open the paper.`;
+  showDialogStatus("The paper is valid. Rebuilding the paper dependency graph…");
 
-  const previousState = MathTraceGraphView.getState();
   project.viewMode = "workspace";
-  populatePaperCard(project);
-  paperCardView.setAttribute("hidden", "");
-  graphSurface.classList.remove("is-paper-card");
-  dependencyGraph.removeAttribute("hidden");
-  graphToolbar.removeAttribute("hidden");
-  bundleMenu.removeAttribute("hidden");
-  await refreshGraphAfterBundleChange(project, previousState);
+  await renderWorkspaceGraph();
 }
 
 async function handlePaperFolderSelection(event) {
@@ -1291,27 +1449,8 @@ openMathTraceFolderButton.addEventListener("click", () => {
   paperFolderInput.click();
 });
 paperFolderInput.addEventListener("change", handlePaperFolderSelection);
-expandPaperButton.addEventListener("click", async () => {
-  const project = activeProject();
-
-  if (!project) {
-    return;
-  }
-
-  await setProjectViewMode(project, "graph");
-  graphSurface.focus({ preventScroll: true });
-});
-graphSurface.addEventListener("mathtrace:paper-collapse", async () => {
-  const project = activeProject();
-
-  if (!project || (!nodeEditorView.hasAttribute("hidden") && !closeNodeEditor())) {
-    return;
-  }
-
-  await setProjectViewMode(project, "card");
-  expandPaperButton.focus({ preventScroll: true });
-});
-  createNodeButton.addEventListener("click", openCreateNodeEditor);
+closePaperButton.addEventListener("click", closeOpenPaper);
+createNodeButton.addEventListener("click", openCreateNodeEditor);
 editNodeButton.addEventListener("click", openEditNodeEditor);
 deleteNodeButton.addEventListener("click", openNodeDeleteDialog);
 nodeEditorView.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -1328,6 +1467,17 @@ nodeDeleteDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   closeNodeDeleteDialog();
 });
+cancelPaperDeleteButton.addEventListener("click", () => closePaperDeleteDialog());
+confirmPaperDeleteButton.addEventListener("click", confirmPaperDeletion);
+paperDeleteDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closePaperDeleteDialog();
+});
+paperDeleteDialog.addEventListener("click", (event) => {
+  if (event.target === paperDeleteDialog) {
+    closePaperDeleteDialog();
+  }
+});
 nodeSourceEditor.addEventListener("input", () => {
   syncNodeSourceHighlight();
   showNodeEditorStatus("");
@@ -1340,7 +1490,7 @@ bundleMenuButton.addEventListener("click", () => {
     closeBundleMenu({ restoreFocus: true });
   }
 });
-bundleMenuList.addEventListener("click", (event) => {
+bundleMenuList.addEventListener("click", async (event) => {
   const action = event.target.closest("[data-bundle-action]");
 
   if (!action) {
@@ -1358,7 +1508,20 @@ bundleMenuList.addEventListener("click", (event) => {
     openBundleEditor(action.dataset.bundleId);
   } else {
     closeBundleMenu();
-    MathTraceGraphView.selectNodeById(action.dataset.nodeId);
+    const project = projectByInstanceId(action.dataset.projectInstanceId);
+
+    if (!project) {
+      return;
+    }
+
+    if (mathTraceState.viewMode === "paper") {
+      await renderWorkspaceGraph({
+        showActiveOverview: false,
+        state: workspaceReturnState(),
+      });
+    }
+
+    MathTraceGraphView.selectNodeById(paperContainerId(project));
   }
 });
 bundleMenuList.addEventListener("keydown", (event) => {
@@ -1536,25 +1699,24 @@ graphSurface.addEventListener("mathtrace:bundle-toggle", (event) => {
 });
 
 graphSurface.addEventListener("mathtrace:node-select", async (event) => {
-  const workspaceNode = event.detail.node;
-  const project = projectByInstanceId(workspaceNode.projectInstanceId);
+  const graphNode = event.detail.node;
+  const project = projectByInstanceId(graphNode.projectInstanceId);
 
   if (!project) {
     return;
   }
 
   mathTraceState.activeProjectInstanceId = project.instanceId;
-  createNodeButton.removeAttribute("disabled");
+  createNodeButton.toggleAttribute("disabled", mathTraceState.viewMode !== "paper");
   updateBundleMenuState();
 
-  if (workspaceNode.kind === "paper") {
+  if (graphNode.kind === "paper") {
     project.graphReaderMode = "overview";
-    project.graphViewState = MathTraceGraphView.getState();
     await showPaperOverview(project, { rememberGraphMode: false });
     return;
   }
 
-  const node = project.graph.nodeById.get(workspaceNode.originalId);
+  const node = project.graph.nodeById.get(graphNode.originalId || graphNode.id);
 
   if (!node) {
     return;
@@ -1572,12 +1734,31 @@ graphSurface.addEventListener("mathtrace:node-select", async (event) => {
   });
 });
 
+graphSurface.addEventListener("mathtrace:node-open", async (event) => {
+  const graphNode = event.detail.node;
+  const project = projectByInstanceId(graphNode.projectInstanceId);
+
+  if (graphNode.kind === "paper" && project) {
+    await openPaper(project);
+  }
+});
+
+graphSurface.addEventListener("mathtrace:paper-delete-request", (event) => {
+  const graphNode = event.detail.node;
+  const project = projectByInstanceId(graphNode.projectInstanceId);
+
+  if (graphNode.kind === "paper" && project) {
+    openPaperDeleteDialog(project);
+  }
+});
+
 graphSurface.addEventListener("mathtrace:bundle-state-change", (event) => {
   updateBundleMenuState();
-  const state = MathTraceGraphView.getState();
-  mathTraceState.projects.forEach((project) => {
-    project.graphViewState = state;
-  });
+  const project = activeProject();
+
+  if (paperIsOpen(project)) {
+    project.graphViewState = MathTraceGraphView.getState();
+  }
 });
 
 nodeReader.addEventListener("mathtrace:node-link", async (event) => {
@@ -1585,8 +1766,8 @@ nodeReader.addEventListener("mathtrace:node-link", async (event) => {
 
   setNodeExpanded(false);
 
-  if (project?.viewMode === "card") {
-    await setProjectViewMode(project, "graph", { restoreReader: false });
+  if (project && mathTraceState.viewMode === "workspace") {
+    await openPaper(project);
   }
 
   await openLinkedNodePreview(event.detail.nodeId);
@@ -1607,18 +1788,6 @@ nodeReader.addEventListener("mathtrace:bundle-expand", async (event) => {
 
 nodeReader.addEventListener("mathtrace:bundle-collapse", (event) => {
   MathTraceGraphView.collapseBundle(event.detail.bundleId);
-});
-
-paperCardView.addEventListener("click", async (event) => {
-  if (event.target.closest("#expand-paper-button")) {
-    return;
-  }
-
-  const project = activeProject();
-
-  if (project?.viewMode === "card") {
-    await showPaperOverview(project, { rememberGraphMode: false });
-  }
 });
 
 paperDialog.addEventListener("click", (event) => {

@@ -6,17 +6,21 @@ The interface repository contains the viewer and protocol documentation. MathTra
 
 ## Documentation
 
+- [`docs/mathtrace-philosophy.md`](docs/mathtrace-philosophy.md): the motivation for web-native papers, dependency-driven collaboration, granular verification, parallel refereeing, and mathematical canonization.
 - [`docs/node-markdown-format.md`](docs/node-markdown-format.md): node schema, kinds, metadata, granularity, and examples.
-- [`docs/mathtrace-paper-format.md`](docs/mathtrace-paper-format.md): the paper manifest, metadata, prose, node discovery, layout, and export.
+- [`docs/mathtrace-paper-format.md`](docs/mathtrace-paper-format.md): the minimal paper manifest, paper-level prose, imported-node rule, and export.
 - [`docs/authoring-and-conversion-guidelines.md`](docs/authoring-and-conversion-guidelines.md): native authoring and AI-assisted LaTeX conversion.
-- [`docs/mathtrace-project-model.md`](docs/mathtrace-project-model.md): paper identity, workspace behavior, and future cross-paper references.
+- [`docs/mathtrace-project-model.md`](docs/mathtrace-project-model.md): paper identity, workspace behavior, and self-contained imported nodes.
 
 The same core guide is available from the interface's **Documentation** button.
 
-Interface v49 uses narrower graph nodes with room for three title lines and
-assigns distinct, restrained colors to definitions, lemmas, propositions,
-corollaries, theorems, and examples. Other mathematical node kinds remain
-white.
+Interface v54 opens with a MathTrace welcome, leads its documentation with the
+project philosophy, and includes a visual example of compact node-metadata
+badges. It retains v53's independent camera state for the cross-paper graph:
+ordinary paper navigation restores the saved pan and zoom, while a new paper
+or changed cross-paper dependency rebuilds and fits the workspace.
+The minimal manifest, arXiv author links, and dashed imported nodes from v51
+remain supported.
 
 ## Updating a release
 

@@ -281,6 +281,7 @@ body.is-loading {
 
 .bundle-menu-button,
 .create-node-button,
+.close-paper-button,
 .expand-node-button,
 .edit-node-button,
 .delete-node-button,
@@ -312,6 +313,7 @@ body.is-loading {
 
 .bundle-menu-button:not(:disabled):hover,
 .create-node-button:not(:disabled):hover,
+.close-paper-button:not(:disabled):hover,
 .expand-node-button:not(:disabled):hover,
 .edit-node-button:not(:disabled):hover,
 .delete-node-button:not(:disabled):hover,
@@ -324,11 +326,11 @@ body.is-loading {
 
 .bundle-menu-button:focus-visible,
 .create-node-button:focus-visible,
+.close-paper-button:focus-visible,
 .expand-node-button:focus-visible,
 .edit-node-button:focus-visible,
 .delete-node-button:focus-visible,
 .graph-action-button:focus-visible,
-.expand-paper-button:focus-visible,
 .bundle-menu-item:focus-visible {
   outline: 3px solid rgba(49, 87, 164, 0.25);
   outline-offset: 2px;
@@ -336,6 +338,7 @@ body.is-loading {
 
 .bundle-menu-button:disabled,
 .create-node-button:disabled,
+.close-paper-button:disabled,
 .expand-node-button:disabled,
 .edit-node-button:disabled,
 .delete-node-button:disabled {
@@ -348,6 +351,11 @@ body.is-loading {
 .edit-node-button {
   border-color: #b7c4df;
   color: var(--accent);
+}
+
+.close-paper-button {
+  border-color: #e0bbb8;
+  color: #a5362e;
 }
 
 .expand-node-button[aria-pressed="true"] {
@@ -631,132 +639,16 @@ body.is-loading {
   user-select: none;
 }
 
-.graph-surface.has-graph.is-paper-card {
-  display: grid;
-  place-items: center;
-  overflow: auto;
-  padding: 54px;
-  cursor: default;
-  user-select: text;
+.paper-overview-authors a {
+  color: inherit;
+  text-decoration-color: #9aa6bb;
+  text-underline-offset: 2px;
 }
 
-.paper-card-view {
-  width: min(520px, calc(100% - 40px));
-}
-
-.paper-card {
-  overflow: hidden;
-  border: 1px solid #cdd6e5;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 18px 44px rgba(31, 45, 70, 0.14);
-}
-
-.paper-card.is-selected {
-  border-color: #9eb2d6;
-  box-shadow: 0 18px 44px rgba(31, 45, 70, 0.14), 0 0 0 3px rgba(49, 87, 164, 0.08);
-}
-
-.paper-card-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 22px 26px 0;
-}
-
-.paper-card-type {
+.paper-overview-authors a:hover,
+.paper-overview-authors a:focus-visible {
   color: var(--accent);
-  font-size: 0.68rem;
-  font-weight: 780;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.paper-card-id {
-  overflow: hidden;
-  color: #647087;
-  font-size: 0.68rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.paper-card h2 {
-  margin: 18px 26px 0;
-  color: var(--text);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.45rem, 2vw, 1.9rem);
-  font-weight: 650;
-  letter-spacing: -0.025em;
-  line-height: 1.18;
-}
-
-.paper-card-authors {
-  margin: 12px 26px 0;
-  color: #536078;
-  font-size: 0.78rem;
-  line-height: 1.5;
-}
-
-.paper-card-facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 24px 26px 0;
-  padding: 16px 0;
-  border-top: 1px solid var(--muted-border);
-  border-bottom: 1px solid var(--muted-border);
-}
-
-.paper-card-facts div {
-  min-width: 0;
-  padding: 0 12px;
-  border-left: 1px solid var(--muted-border);
-}
-
-.paper-card-facts div:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.paper-card-facts dt {
-  margin-bottom: 5px;
-  color: var(--muted-text);
-  font-size: 0.62rem;
-  font-weight: 720;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
-
-.paper-card-facts dd {
-  overflow: hidden;
-  margin: 0;
-  color: #273044;
-  font-size: 0.72rem;
-  font-weight: 690;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.expand-paper-button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(100% - 52px);
-  height: 42px;
-  margin: 22px 26px 26px;
-  padding: 0 15px;
-  border: 1px solid #294d91;
-  border-radius: 8px;
-  background: var(--accent);
-  color: #ffffff;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 720;
-}
-
-.expand-paper-button:hover {
-  background: #294d91;
+  text-decoration-color: currentColor;
 }
 
 .graph-surface.is-panning {
@@ -1087,58 +979,6 @@ body.is-loading {
   marker-end: url(#dependency-arrow-dependent);
 }
 
-.graph-paper-frame-border {
-  fill: none;
-  stroke: #aebbd0;
-  stroke-width: 1.6;
-  vector-effect: non-scaling-stroke;
-}
-
-.graph-paper-frame-header {
-  fill: rgba(255, 255, 255, 0.96);
-  stroke: #aebbd0;
-  stroke-width: 1.35;
-  vector-effect: non-scaling-stroke;
-}
-
-.graph-paper-frame-id {
-  fill: #3157a4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
-  font-weight: 760;
-}
-
-.graph-paper-collapse {
-  cursor: pointer;
-  outline: none;
-}
-
-.graph-paper-collapse rect {
-  fill: #ffffff;
-  stroke: #9eacc2;
-  stroke-width: 1.2;
-  vector-effect: non-scaling-stroke;
-}
-
-.graph-paper-collapse text {
-  fill: #465269;
-  font-size: 10px;
-  font-weight: 720;
-  pointer-events: none;
-}
-
-.graph-paper-collapse:hover rect,
-.graph-paper-collapse:focus-visible rect {
-  fill: #f3f6fb;
-  stroke: #3157a4;
-  stroke-width: 1.8;
-}
-
-.graph-paper-collapse:hover text,
-.graph-paper-collapse:focus-visible text {
-  fill: #3157a4;
-}
-
 .graph-node {
   cursor: pointer;
   outline: none;
@@ -1207,10 +1047,7 @@ body.is-loading {
 
 .graph-node--bundle.is-bundle-expanded rect,
 .graph-node--bundle.is-bundle-expanded:hover rect,
-.graph-node--bundle.is-bundle-expanded:focus-visible rect,
-.graph-node--paper.is-bundle-expanded rect,
-.graph-node--paper.is-bundle-expanded:hover rect,
-.graph-node--paper.is-bundle-expanded:focus-visible rect {
+.graph-node--bundle.is-bundle-expanded:focus-visible rect {
   stroke: var(--accent);
   stroke-width: 2.35;
   filter: drop-shadow(0 2px 3px rgba(49, 87, 164, 0.2));
@@ -1306,6 +1143,13 @@ body.is-loading {
   fill: #175b3b;
 }
 
+.graph-node.is-imported-node rect,
+.graph-node.is-imported-node:hover rect,
+.graph-node.is-imported-node:focus-visible rect,
+.graph-node.is-imported-node.is-selected rect {
+  stroke-dasharray: 7 4;
+}
+
 .graph-bundle-island {
   cursor: grab;
   filter: drop-shadow(0 8px 16px rgba(31, 45, 70, 0.18));
@@ -1335,10 +1179,6 @@ body.is-loading {
 .graph-bundle-island-header {
   fill: #edf1f7;
   pointer-events: none;
-}
-
-.graph-paper-island-header {
-  fill: #dbe6f6;
 }
 
 .graph-bundle-island.is-bundle-selected .graph-bundle-island-background {
@@ -1390,12 +1230,6 @@ body.is-loading {
   font-weight: 700;
 }
 
-.graph-paper-island-id {
-  fill: #263d67;
-  font-size: 13px;
-  font-weight: 750;
-}
-
 .graph-bundle-member rect {
   vector-effect: non-scaling-stroke;
 }
@@ -1429,24 +1263,6 @@ body.is-loading {
   text-anchor: middle;
 }
 
-.graph-bundle-control.graph-paper-close rect {
-  fill: #d33a32;
-  stroke: #a4211b;
-  stroke-width: 1.4;
-}
-
-.graph-bundle-control.graph-paper-close:hover rect,
-.graph-bundle-control.graph-paper-close:focus-visible rect {
-  fill: #b92d27;
-  stroke: #7f1713;
-}
-
-.graph-bundle-control.graph-paper-close text {
-  fill: #ffffff;
-  font-size: 25px;
-  font-weight: 700;
-}
-
 .graph-node-kind {
   fill: #667085;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1462,6 +1278,41 @@ body.is-loading {
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 11px;
   font-weight: 650;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.graph-node .graph-paper-delete-control {
+  cursor: pointer;
+  outline: none;
+}
+
+.graph-node .graph-paper-delete-control rect,
+.graph-node:hover .graph-paper-delete-control rect,
+.graph-node:focus-visible .graph-paper-delete-control rect,
+.graph-node.is-selected .graph-paper-delete-control rect,
+.graph-node.is-selected:hover .graph-paper-delete-control rect,
+.graph-node.is-selected:focus-visible .graph-paper-delete-control rect {
+  fill: #c9362b;
+  stroke: #9f251d;
+  stroke-dasharray: none;
+  stroke-width: 1.2;
+  filter: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.graph-node .graph-paper-delete-control:hover rect,
+.graph-node .graph-paper-delete-control:focus-visible rect {
+  fill: #a9231b;
+  stroke: #7e1712;
+  stroke-width: 1.8;
+}
+
+.graph-paper-delete-control text {
+  fill: #ffffff;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 18px;
+  font-weight: 700;
   pointer-events: none;
   text-anchor: middle;
 }
@@ -1525,14 +1376,6 @@ body.is-loading {
   line-height: 1.5;
 }
 
-.paper-overview-affiliations {
-  margin: 6px 0 0;
-  color: var(--muted-text);
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
-
 .paper-overview-metadata {
   display: flex;
   flex-wrap: wrap;
@@ -1548,14 +1391,6 @@ body.is-loading {
   color: #59657b;
   font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.66rem;
-}
-
-.paper-overview-keywords {
-  margin: 12px 0 0;
-  color: var(--muted-text);
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 0.72rem;
-  line-height: 1.55;
 }
 
 .node-reader.is-paper-overview .node-document-header {
@@ -1811,6 +1646,41 @@ body.is-loading {
   margin: 0 0 13px;
 }
 
+.documentation-lede {
+  max-width: 760px;
+  color: #33425a !important;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.08rem !important;
+  line-height: 1.65 !important;
+}
+
+.documentation-philosophy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.documentation-philosophy-grid article {
+  padding: 19px 20px 17px;
+  border: 1px solid #dce3ee;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #ffffff, #f8fafd);
+}
+
+.documentation-philosophy-grid h3 {
+  margin: 0 0 8px;
+  color: #294f92;
+  font-size: 0.86rem;
+}
+
+.documentation-philosophy-grid p {
+  margin: 0;
+  color: #536078;
+  font-size: 0.81rem;
+  line-height: 1.62;
+}
+
 .documentation-content ol,
 .documentation-content ul {
   margin: 0;
@@ -1846,6 +1716,66 @@ body.is-loading {
   border-left: 3px solid #8ba5d4;
   border-radius: 0 7px 7px 0;
   background: #f4f7fc;
+}
+
+.documentation-badge-example {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 13px 15px;
+  border: 1px solid #dce3ee;
+  border-radius: 8px;
+  background: #fafbfd;
+}
+
+.documentation-badge-example-label {
+  margin-right: 3px;
+  color: #6a7588;
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.documentation-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 8px;
+  border: 1px solid #d4dce8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #4d5b71;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.documentation-badge--kind {
+  border-color: #e4bdc8;
+  background: #fbf0f3;
+  color: #8a3f55;
+}
+
+.documentation-badge--status,
+.documentation-badge--lean {
+  border-color: #b9dccb;
+  background: #eef9f4;
+  color: #287356;
+}
+
+.documentation-badge--tag {
+  border-color: #bfd2ec;
+  background: #eff5fc;
+  color: #315f99;
+}
+
+.documentation-badge--ai {
+  border-color: #d4c5eb;
+  background: #f6f1fc;
+  color: #70509a;
 }
 
 .documentation-code {
@@ -2181,6 +2111,24 @@ body.is-loading {
 .node-delete-confirm:disabled {
   cursor: wait;
   opacity: 0.58;
+}
+
+.paper-delete-edit-status {
+  margin: 18px 0 0;
+  padding: 13px 15px;
+  border: 1px solid #cdd7e6;
+  border-radius: 8px;
+  background: #f7f9fc;
+  color: #4f5d72;
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.paper-delete-edit-status[data-edited="true"] {
+  border-color: #e4b8b4;
+  background: #fff6f5;
+  color: #8a2d26;
 }
 
 .bundle-editor-dialog {
@@ -2639,6 +2587,10 @@ body.is-loading {
   margin: 0;
   font-size: 1.35rem;
   letter-spacing: -0.025em;
+}
+
+.paper-dialog .paper-dialog-welcome {
+  margin: 0 0 24px;
 }
 
 .dialog-description {

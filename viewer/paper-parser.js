@@ -72,8 +72,7 @@
     if (typeof value === "string") {
       return {
         name: requiredString(value, "name", authorSource),
-        affiliation: null,
-        orcid: null,
+        arxiv: null,
       };
     }
 
@@ -81,25 +80,26 @@
       throw new Error(`${authorSource} must be a name or a mapping.`);
     }
 
-    return {
-      name: requiredString(value.name, "name", authorSource),
-      affiliation: optionalString(value.affiliation, "affiliation", authorSource),
-      orcid: optionalString(value.orcid, "orcid", authorSource),
-    };
-  }
+    const arxiv = optionalString(value.arxiv, "arxiv", authorSource);
 
-  function normalizeRelativeDirectory(value, sourceName) {
-    const directory = requiredString(value, "graph.nodeDirectory", sourceName)
-      .replaceAll("\\", "/")
-      .replace(/^\.\//, "")
-      .replace(/\/+$/, "");
-    const parts = directory.split("/");
+    if (arxiv) {
+      let url;
 
-    if (directory.startsWith("/") || parts.some((part) => part === "" || part === "." || part === "..")) {
-      throw new Error(`${sourceName}: graph.nodeDirectory must be a safe relative directory.`);
+      try {
+        url = new URL(arxiv);
+      } catch {
+        throw new Error(`${authorSource}: arxiv must be a complete HTTPS arXiv URL.`);
+      }
+
+      if (url.protocol !== "https:" || url.hostname !== "arxiv.org") {
+        throw new Error(`${authorSource}: arxiv must be a complete HTTPS URL on arxiv.org.`);
+      }
     }
 
-    return directory;
+    return {
+      name: requiredString(value.name, "name", authorSource),
+      arxiv,
+    };
   }
 
   function splitFrontmatter(text, sourceName) {
@@ -148,56 +148,23 @@
     const parts = splitFrontmatter(paperFile.text, sourceName);
     const metadata = parseYaml(parts.frontmatter, `${sourceName} frontmatter`);
 
-    if (metadata.format !== "mathtrace-paper") {
-      throw new Error(`${sourceName}: format must be mathtrace-paper.`);
+    const paperId = requiredString(metadata.id, "id", sourceName);
+
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(paperId)) {
+      throw new Error(`${sourceName}: id must use lowercase letters, digits, and single hyphens only.`);
     }
 
-    if (!Number.isInteger(metadata.version) || metadata.version < 1) {
-      throw new Error(`${sourceName}: version must be a positive integer.`);
+    if (!Array.isArray(metadata.authors) || metadata.authors.length === 0) {
+      throw new Error(`${sourceName}: authors must be a nonempty list.`);
     }
-
-    if (metadata.authors !== undefined && !Array.isArray(metadata.authors)) {
-      throw new Error(`${sourceName}: authors must be a list.`);
-    }
-
-    if (metadata.source !== undefined && !isRecord(metadata.source)) {
-      throw new Error(`${sourceName}: source must be a mapping when provided.`);
-    }
-
-    if (metadata.graph !== undefined && !isRecord(metadata.graph)) {
-      throw new Error(`${sourceName}: graph must be a mapping when provided.`);
-    }
-
-    if (metadata.layout !== undefined && !isRecord(metadata.layout)) {
-      throw new Error(`${sourceName}: layout must be a mapping when provided.`);
-    }
-
-    if (metadata.bundling !== undefined && !isRecord(metadata.bundling)) {
-      throw new Error(`${sourceName}: bundling must be a mapping when provided.`);
-    }
-
-    const graph = isRecord(metadata.graph)
-      ? {
-        nodeDirectory: normalizeRelativeDirectory(
-          metadata.graph.nodeDirectory ?? "nodes",
-          sourceName,
-        ),
-      }
-      : { nodeDirectory: "nodes" };
 
     return {
-      format: metadata.format,
-      version: metadata.version,
-      id: requiredString(metadata.id, "id", sourceName),
+      id: paperId,
       title: requiredString(metadata.title, "title", sourceName),
-      authors: (metadata.authors || []).map((author, index) => parseAuthor(author, index, sourceName)),
-      date: optionalString(metadata.date, "date", sourceName),
-      status: optionalString(metadata.status, "status", sourceName),
-      keywords: optionalStringArray(metadata.keywords, "keywords", sourceName),
-      source: metadata.source || {},
-      graph,
-      layout: isRecord(metadata.layout) ? metadata.layout : {},
-      bundling: isRecord(metadata.bundling) ? metadata.bundling : {},
+      authors: metadata.authors.map((author, index) => parseAuthor(author, index, sourceName)),
+      graph: { nodeDirectory: "nodes" },
+      layout: {},
+      bundling: {},
       path: sourceName,
       body: parts.body,
       metadata,

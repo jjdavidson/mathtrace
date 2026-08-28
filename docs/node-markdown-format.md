@@ -11,7 +11,7 @@ Every node is a Markdown file with YAML frontmatter. A node represents one coher
 | `kind` | Nonempty string | Classifies the idea. Store lowercase values and display them in title case. Recommended values appear below. |
 | `requires` | List of node IDs | Direct mathematical prerequisites. The list is always present, even when empty. Entries must exist, be unique, and keep the graph acyclic. |
 
-An ID identifies mathematical content, while a path only organizes files. Moving a node between folders must not change its ID. Within a paper, `requires` uses these stable IDs. The `paper-id::node-id` spelling is reserved for future cross-paper dependencies.
+An ID identifies mathematical content, while a path only organizes files. Moving a node between folders must not change its ID. A node belongs to the paper whose ID is the part before its first dot. If another paper needs it, copy the node and all of its required prerequisites into that paper without changing their IDs. The viewer marks these imported nodes with dashed borders.
 
 ## Recommended kinds
 
@@ -53,6 +53,8 @@ The dependency graph gives six common mathematical roles restrained, light color
 | `superseded_by` | Node ID | Replacement for a deprecated node. |
 
 The current parser retains additional frontmatter in `metadata`. Compact badges for kind, status, subject tags, AI assistance, and Lean verification are part of the intended reader presentation; longer provenance belongs in a metadata detail view.
+
+For example, a reviewed theorem about graph theory that received AI copyediting and has a linked Lean declaration could display the compact row `Theorem` · `Reviewed` · `Graph theory` · `AI · Copyediting` · `Lean verified`.
 
 Recommended structured forms:
 
@@ -155,8 +157,8 @@ Pull a proper coloring of $Y$ back through the homomorphism.
 
 ## Browser editing behavior
 
-Select an ordinary node and choose **Edit node** to edit the complete source. A body-only save rerenders the reader without relaying out the graph. A frontmatter save rebuilds and validates the graph while preserving compatible view state. **Create node** opens a starter file beneath `nodes/newly-added/` (or the configured node directory's `newly-added/` subfolder).
+Open a paper, select an ordinary node, and choose **Edit node** to edit the complete source. A body-only save rerenders the reader without relaying out the graph. A frontmatter save rebuilds and validates the graph while preserving compatible view state. **Create node** is available only while a paper is open and places its starter file beneath that paper's `nodes/newly-added/` directory.
 
-The source editor highlights mathematics delimited by `$...$`, `$$...$$`, `\(...\)`, or `\[...\]` in green without altering the Markdown. In the reader, **Expand node** lets the selected node cover both workspace panels for large figures and interactive demonstrations; **Shrink node** restores the dependency-graph split view.
+The source editor highlights mathematics delimited by `$...$`, `$$...$$`, `\(...\)`, or `\[...\]` in green without altering the Markdown. In the reader, **Expand panel** lets the selected node cover both workspace panels for large figures and interactive demonstrations; **Shrink panel** restores the dependency-graph split view.
 
 Renaming a node migrates dependency references, `[[node.id]]` links, and paper-overview links without changing the existing file path. Invalid frontmatter, a missing `requires` list, missing prerequisites, duplicate IDs or paths, and dependency cycles are rejected without mutating the working project. Downloads preserve every existing node path; newly created files remain in `newly-added/` until an author reorganizes them outside the browser.

@@ -1,63 +1,29 @@
 # `mathtrace.paper.md` manifest
 
-`mathtrace.paper.md` is the required top-level manifest for a native MathTrace paper. It combines paper-wide metadata and prose with the node-discovery and layout settings formerly stored in `mathtrace.init.yaml`. It is not a graph node and does not acquire dependency edges. The viewer displays its Markdown body whenever the paper card is selected.
+`mathtrace.paper.md` is the required top-level file for a native MathTrace paper. Its frontmatter identifies the paper; its Markdown body contains paper-wide prose such as the abstract, introduction, conclusion, acknowledgments, and publication information. It is not a graph node and has no dependencies.
 
-Put material that describes the work as a whole here rather than forcing it into the dependency graph: title, authors, abstract, introduction, conclusion, acknowledgments, broad motivation, and bibliographic provenance. Ordinary nodes carry the mathematical ideas navigated through dependency edges.
+Keep the frontmatter minimal. MathTrace finds nodes beneath `nodes/` and supplies its own graph-layout defaults.
 
 ## Required frontmatter
 
 | Field | Type | Use |
 | --- | --- | --- |
-| `format` | Exact string | Must be `mathtrace-paper`. |
-| `version` | Positive integer | Manifest schema version. Use `2`. |
-| `id` | Nonempty string | Stable paper identifier and future cross-paper namespace. |
-| `title` | Nonempty string | Full display title. |
-| `graph` | Mapping | Contains graph-source settings. |
-| `graph.nodeDirectory` | Safe relative directory | Directory recursively searched for node `.md` files. Use `nodes` unless another name is necessary. |
+| `id` | Paper slug | Stable paper identity and node namespace. Use lowercase letters, digits, and single hyphens; do not use dots. |
+| `title` | Nonempty string | Full title shown on the paper node and overview. |
+| `authors` | Nonempty list | Each item is either a name or a mapping with `name` and an optional `arxiv` URL. |
 
-`graph.nodeDirectory` cannot be absolute and cannot contain empty, `.`, or `..` path components.
-
-## Optional frontmatter
-
-| Field | Type | Use |
-| --- | --- | --- |
-| `authors` | List of names or author mappings | Displays authors. A mapping requires `name` and may include `affiliation` and `orcid`. |
-| `date` | Nonempty string | Human-readable publication or draft date. |
-| `status` | Nonempty string | Paper state such as `draft`, `preprint`, `submitted`, or `published`. |
-| `keywords` | List of strings | Subjects for discovery and future filtering. |
-| `source` | Mapping | Open provenance such as `doi`, `arxiv`, `journal`, `url`, or an original filename. |
-| `layout` | Mapping | Graph layout configuration. |
-| `layout.engine` | String | Documents the intended engine. The current viewer uses its vendored ELK renderer. |
-| `layout.algorithm` | String | Defaults to `layered`, which is designed for dependency graphs. |
-| `layout.direction` | String | Defaults to `DOWN`; common alternatives are `UP`, `LEFT`, and `RIGHT`. |
-| `layout.nodePlacementStrategy` | String | Defaults to `NETWORK_SIMPLEX` for layered layout. |
-| `bundling` | Mapping | Low-level graph-simplification compatibility settings. A paper cannot contain another paper. |
+An `arxiv` value must be a complete HTTPS URL on `arxiv.org`. When supplied, the author's name links to that page in the paper overview.
 
 ## Complete example
 
 ```markdown
 ---
-format: mathtrace-paper
-version: 2
 id: example-paper
 title: "An Example Paper"
 authors:
   - name: Ada Example
-    affiliation: Example University
-    orcid: 0000-0000-0000-0000
-date: "2026"
-status: preprint
-keywords:
-  - graph theory
-source:
-  doi: 10.0000/example
-graph:
-  nodeDirectory: nodes
-layout:
-  engine: elk
-  algorithm: layered
-  direction: DOWN
-  nodePlacementStrategy: NETWORK_SIMPLEX
+    arxiv: "https://arxiv.org/search/math?query=Example,+A&searchtype=author"
+  - Emmy Example
 ---
 
 ## Abstract
@@ -69,8 +35,18 @@ Paper-wide Markdown goes here.
 The main result is [[example-paper.main-theorem]].
 ```
 
+## Native and imported nodes
+
+A node is native to a paper exactly when its ID begins with the paper ID followed by a dot. Thus `example-paper.main-theorem` is native to `example-paper`, while `foundations.graph-homomorphism` is imported.
+
+When a paper uses a node from another MathTrace paper, copy that node into the consuming paper's `nodes/` directory without changing its ID. Also copy every prerequisite needed to make the dependency graph complete. Do not load or copy the source paper as a whole. Imported nodes are snapshots: the consuming paper controls when to update them.
+
+The viewer draws imported nodes with dashed borders. This makes provenance visible while keeping every paper independently loadable and limited to the mathematical material it actually uses.
+
+When the source paper is also loaded and contains the exact imported node ID natively, MathTrace connects the source paper to the consuming paper in the paper dependency graph. The graph is rebuilt whenever another paper is loaded, so these relationships resolve incrementally.
+
 ## Body and export
 
-Everything below the frontmatter is rendered with the same Markdown, mathematics, and `[[node.id|optional label]]` rules used for node content. `Abstract`, `Introduction`, and `Conclusion` are ordinary Markdown headings rather than reserved syntax.
+Everything below the frontmatter is rendered with the same Markdown, mathematics, and `[[node.id|optional label]]` rules used for nodes. Headings such as Abstract, Introduction, and Conclusion are ordinary Markdown headings rather than reserved syntax.
 
-The paper download contains this manifest, the `nodes/` directory, and the optional `demos/` directory. Existing node files retain their original relative paths, even after edits or ID changes. Nodes created in the browser are exported beneath `nodes/newly-added/` (or the configured node directory's `newly-added/` subfolder). Files beneath `demos/` retain their original relative paths and bytes.
+Paper downloads contain this manifest, the `nodes/` directory, and the optional `demos/` directory. Existing paths are preserved. Nodes created in the browser are exported beneath `nodes/newly-added/`. Files beneath `demos/` retain their paths and bytes.

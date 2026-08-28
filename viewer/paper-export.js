@@ -50,14 +50,15 @@
       throw new Error("mathtrace.paper.md must contain YAML frontmatter.");
     }
 
-    metadata.format = "mathtrace-paper";
-    metadata.version = Math.max(2, Number(metadata.version) || 1);
-    metadata.graph = clone(project.configuration.graph);
-    metadata.layout = clone(project.configuration.layout || {});
-    metadata.bundling = clone(project.configuration.bundling || {});
-    delete metadata.bundles;
+    const minimalMetadata = {
+      id: project.paper.id,
+      title: project.paper.title,
+      authors: project.paper.authors.map((author) => (
+        author.arxiv ? { name: author.name, arxiv: author.arxiv } : author.name
+      )),
+    };
 
-    return `---\n${dumpYaml(metadata)}\n---\n\n${parts.body.replace(/^\n+/, "")}`;
+    return `---\n${dumpYaml(minimalMetadata)}\n---\n\n${parts.body.replace(/^\n+/, "")}`;
   }
 
   function normalizedFiles(files) {

@@ -105,8 +105,8 @@
       if (!memberToBundle.has(node.id)) {
         nodes.push({
           ...node,
-          width: NODE_WIDTH,
-          height: NODE_HEIGHT,
+          width: node.kind === "paper" ? BUNDLE_WIDTH : NODE_WIDTH,
+          height: node.kind === "paper" ? BUNDLE_HEIGHT : NODE_HEIGHT,
         });
       }
     }
@@ -394,6 +394,63 @@
     }));
   }
 
+  function requestNodeOpen(surface, node) {
+    surface.dispatchEvent(new CustomEvent("mathtrace:node-open", {
+      bubbles: true,
+      detail: { node },
+    }));
+  }
+
+  function requestPaperDelete(surface, node) {
+    surface.dispatchEvent(new CustomEvent("mathtrace:paper-delete-request", {
+      bubbles: true,
+      detail: { node },
+    }));
+  }
+
+  function renderPaperDeleteControl(node, group, surface) {
+    const size = 22;
+    const control = createSvgElement("g", {
+      class: "graph-paper-delete-control",
+      transform: `translate(${node.width - size - 5} 5)`,
+      tabindex: 0,
+      role: "button",
+      "aria-label": `Delete paper ${node.paperId}: ${node.title}`,
+      "data-project-instance-id": node.projectInstanceId,
+    });
+    control.append(createSvgElement("rect", {
+      width: size,
+      height: size,
+      rx: 6,
+      ry: 6,
+    }));
+    const label = createSvgElement("text", {
+      x: size / 2,
+      y: 16,
+      "aria-hidden": "true",
+    });
+    label.textContent = "×";
+    control.append(label);
+    control.addEventListener("pointerdown", (event) => event.stopPropagation());
+    control.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    control.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      requestPaperDelete(surface, node);
+    });
+    control.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        event.stopPropagation();
+        requestPaperDelete(surface, node);
+      }
+    });
+    group.append(control);
+  }
+
   function applyBundleSelectionStyles(view) {
     const selection = view.bundleSelection;
     view.surface.classList.toggle("is-bundle-selection-mode", Boolean(selection));
@@ -487,7 +544,7 @@
   }
 
   function bundleActivationAction(view, node) {
-    if (!["bundle", "paper"].includes(node.kind)) {
+    if (node.kind !== "bundle") {
       return "select";
     }
 
@@ -503,7 +560,7 @@
       return;
     }
 
-    if (activeView.bundleSelection && ["bundle", "paper"].includes(node.kind)) {
+    if (activeView.bundleSelection && node.kind === "bundle") {
       if (!activeView.expandedBundles.has(node.id)) {
         await expandBundle(node.id);
       }
@@ -536,18 +593,23 @@
     for (const layoutNode of layoutGraph.children || []) {
       const node = sourceNodeById.get(layoutNode.id);
       const styleKind = nodeStyleKind(node.kind);
+      const importedClass = node.isImported ? " is-imported-node" : "";
+      const importedDescription = node.isImported ? ` Imported from ${node.sourcePaperId}.` : "";
+      const openDescription = node.kind === "paper" ? " Press Enter to open." : "";
       const group = createSvgElement("g", {
-        class: `graph-node graph-node--${styleKind}`,
+        class: `graph-node graph-node--${styleKind}${importedClass}`,
         transform: `translate(${layoutNode.x} ${layoutNode.y})`,
         tabindex: 0,
         role: "button",
-        "aria-label": `${node.kind === "paper" ? "Paper" : node.kind === "bundle" ? "Bundle" : node.kind}: ${node.title}`,
+        "aria-label": `${node.kind === "paper" ? "Paper" : node.kind === "bundle" ? "Bundle" : node.kind}: ${node.title}.${importedDescription}${openDescription}`,
         "data-node-id": node.id,
       });
       const accessibleTitle = createSvgElement("title");
-      accessibleTitle.textContent = ["bundle", "paper"].includes(node.kind)
-        ? `${node.title} (${node.memberCount} nodes). Select, then activate again to expand.`
-        : `${node.title} — ${node.kind}`;
+      accessibleTitle.textContent = node.kind === "paper"
+        ? `${node.title} (${node.memberCount} nodes). Double-click to open.`
+        : node.kind === "bundle"
+          ? `${node.title} (${node.memberCount} nodes). Select, then activate again to expand.`
+          : `${node.title} — ${node.kind}.${importedDescription}`;
       group.append(accessibleTitle);
       group.append(createSvgElement("rect", {
         width: node.width,
@@ -556,14 +618,27 @@
         ry: 8,
       }));
       renderNodeLabel(node, group);
+      if (node.kind === "paper") {
+        renderPaperDeleteControl(node, group, surface);
+      }
       group.addEventListener("click", (event) => {
         event.stopPropagation();
         activateNode(group, surface, node, visibleGraph).catch((error) => {
           console.error(`MathTrace could not toggle ${node.title}.`, error);
         });
       });
+      if (node.kind === "paper") {
+        group.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          requestNodeOpen(surface, node);
+        });
+      }
       group.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") {
+        if (node.kind === "paper" && event.key === "Enter") {
+          event.preventDefault();
+          requestNodeOpen(surface, node);
+        } else if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           activateNode(group, surface, node, visibleGraph).catch((error) => {
             console.error(`MathTrace could not toggle ${node.title}.`, error);
@@ -574,87 +649,6 @@
     }
 
     viewport.append(nodeLayer);
-  }
-
-  function renderPaperFrame(layoutGraph, viewport, surface, paperFrame) {
-    const paperId = String(paperFrame?.id || "").trim();
-
-    if (!paperId) {
-      return;
-    }
-
-    const width = Math.max(1, layoutGraph.width || 1);
-    const height = Math.max(1, layoutGraph.height || 1);
-    const headerHeight = 34;
-    const buttonWidth = 98;
-    const buttonHeight = 24;
-    const group = createSvgElement("g", {
-      class: "graph-paper-frame",
-      "data-paper-id": paperId,
-    });
-    group.append(createSvgElement("rect", {
-      class: "graph-paper-frame-border",
-      x: 1,
-      y: 1,
-      width: Math.max(1, width - 2),
-      height: Math.max(1, height - 2),
-      rx: 12,
-      ry: 12,
-    }));
-    group.append(createSvgElement("rect", {
-      class: "graph-paper-frame-header",
-      x: 1,
-      y: 1,
-      width: Math.max(1, width - 2),
-      height: headerHeight,
-      rx: 12,
-      ry: 12,
-    }));
-
-    const label = createSvgElement("text", {
-      class: "graph-paper-frame-id",
-      x: 14,
-      y: 22,
-    });
-    label.textContent = paperId;
-    group.append(label);
-
-    const collapse = createSvgElement("g", {
-      class: "graph-paper-collapse",
-      transform: `translate(${Math.max(8, width - buttonWidth - 8)} 6)`,
-      tabindex: 0,
-      role: "button",
-      "aria-label": `Collapse paper ${paperId}`,
-    });
-    collapse.append(createSvgElement("rect", {
-      width: buttonWidth,
-      height: buttonHeight,
-      rx: 6,
-      ry: 6,
-    }));
-    const collapseLabel = createSvgElement("text", {
-      x: buttonWidth / 2,
-      y: 16,
-      "text-anchor": "middle",
-    });
-    collapseLabel.textContent = "Collapse paper";
-    collapse.append(collapseLabel);
-    collapse.addEventListener("pointerdown", (event) => event.stopPropagation());
-    collapse.addEventListener("click", (event) => {
-      event.stopPropagation();
-      surface.dispatchEvent(new CustomEvent("mathtrace:paper-collapse", {
-        bubbles: true,
-        detail: { paperId },
-      }));
-    });
-    collapse.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        collapse.dispatchEvent(new CustomEvent("click"));
-      }
-    });
-    group.append(collapse);
-    viewport.append(group);
   }
 
   function createBundleElkInput(memberNodes, internalEdges) {
@@ -730,7 +724,7 @@
       ry: 12,
       tabindex: 0,
       role: "button",
-      "aria-label": `Move expanded ${expandedBundle.bundle.kind === "paper" ? "paper" : "bundle"} ${expandedBundle.bundle.title}`,
+      "aria-label": `Move expanded bundle ${expandedBundle.bundle.title}`,
     });
     let drag = null;
     let suppressNextClick = false;
@@ -836,15 +830,11 @@
 
   function createBundleCollapseControl(view, island, bundle, islandWidth) {
     const control = createSvgElement("g", {
-      class: bundle.kind === "paper"
-        ? "graph-bundle-control graph-paper-close"
-        : "graph-bundle-control",
+      class: "graph-bundle-control",
       transform: `translate(${islandWidth - 42} 6)`,
       tabindex: 0,
       role: "button",
-      "aria-label": bundle.kind === "paper"
-        ? `Close and collapse paper ${bundle.title}`
-        : `Collapse ${bundle.title}`,
+      "aria-label": `Collapse ${bundle.title}`,
     });
     control.append(createSvgElement("rect", {
       width: 32,
@@ -878,16 +868,18 @@
 
     for (const layoutNode of layoutGraph.children || []) {
       const node = memberById.get(layoutNode.id);
+      const importedClass = node.isImported ? " is-imported-node" : "";
+      const importedDescription = node.isImported ? ` Imported from ${node.sourcePaperId}.` : "";
       const group = createSvgElement("g", {
-        class: `graph-node graph-bundle-member graph-node--${nodeStyleKind(node.kind)}`,
+        class: `graph-node graph-bundle-member graph-node--${nodeStyleKind(node.kind)}${importedClass}`,
         transform: `translate(${layoutNode.x} ${layoutNode.y})`,
         tabindex: 0,
         role: "button",
-        "aria-label": `${node.kind}: ${node.title}`,
+        "aria-label": `${node.kind}: ${node.title}.${importedDescription}`,
         "data-node-id": node.id,
       });
       const accessibleTitle = createSvgElement("title");
-      accessibleTitle.textContent = `${node.title} — ${node.kind}`;
+      accessibleTitle.textContent = `${node.title} — ${node.kind}.${importedDescription}`;
       group.append(accessibleTitle);
       group.append(createSvgElement("rect", {
         width: BUNDLE_MEMBER_WIDTH,
@@ -945,7 +937,7 @@
     }
 
     const bundle = view.visibleGraph.nodes.find((node) => (
-      node.id === bundleId && ["bundle", "paper"].includes(node.kind)
+      node.id === bundleId && node.kind === "bundle"
     ));
 
     if (!bundle) {
@@ -991,9 +983,7 @@
       ry: 12,
     }));
     island.append(createSvgElement("path", {
-      class: bundle.kind === "paper"
-        ? "graph-bundle-island-header graph-paper-island-header"
-        : "graph-bundle-island-header",
+      class: "graph-bundle-island-header",
       d: `M 12 0 H ${islandWidth - 12} Q ${islandWidth} 0 ${islandWidth} 12 V ${BUNDLE_ISLAND_HEADER} H 0 V 12 Q 0 0 12 0 Z`,
     }));
     createBundleDragHandle(view, expandedBundle);
@@ -1005,25 +995,18 @@
       y2: BUNDLE_ISLAND_HEADER,
     }));
     const title = createSvgElement("text", {
-      class: bundle.kind === "paper"
-        ? "graph-bundle-island-title graph-paper-island-id"
-        : "graph-bundle-island-title",
+      class: "graph-bundle-island-title",
       x: 16,
-      y: bundle.kind === "paper" ? 28 : 34,
+      y: 34,
     });
-    title.textContent = bundle.kind === "paper" ? bundle.paperId : bundle.title;
-
-    if (bundle.kind === "paper") {
-      island.append(title);
-    } else {
-      const kindLabel = createSvgElement("text", {
-        class: "graph-bundle-island-kind",
-        x: 16,
-        y: 17,
-      });
-      kindLabel.textContent = `EXPANDED BUNDLE · ${bundle.memberCount} NODES`;
-      island.append(kindLabel, title);
-    }
+    title.textContent = bundle.title;
+    const kindLabel = createSvgElement("text", {
+      class: "graph-bundle-island-kind",
+      x: 16,
+      y: 17,
+    });
+    kindLabel.textContent = `EXPANDED BUNDLE · ${bundle.memberCount} NODES`;
+    island.append(kindLabel, title);
     renderBundleIslandEdges(localLayout, island);
     renderBundleIslandNodes(view, localLayout, memberNodes, island);
     createBundleCollapseControl(view, island, bundle, islandWidth);
@@ -1194,7 +1177,6 @@
 
       if (
         event.button !== 0
-        || view.surface.classList.contains("is-paper-card")
         || interactionTarget
       ) {
         return;
@@ -1261,7 +1243,6 @@
     emptyState,
     graph,
     state = null,
-    paperFrame = null,
   }) {
     if (activeView?.abortController) {
       activeView.abortController.abort();
@@ -1275,7 +1256,6 @@
     createMarkerDefinitions(svg);
     renderEdges(layoutGraph, viewport);
     renderNodes(layoutGraph, visibleGraph, viewport, surface);
-    renderPaperFrame(layoutGraph, viewport, surface, paperFrame);
 
     const view = {
       surface,
@@ -1378,7 +1358,7 @@
 
     if (!visibleNode) {
       visibleNode = activeView.visibleGraph.nodes.find((node) => (
-        ["bundle", "paper"].includes(node.kind) && node.members.includes(nodeId)
+        node.kind === "bundle" && node.members.includes(nodeId)
       ));
     }
 

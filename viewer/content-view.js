@@ -661,34 +661,30 @@
   function createPaperHeader(paper) {
     const header = createReaderHeader("paper overview", paper.title);
 
-    if (paper.authors.length > 0) {
-      const authors = document.createElement("p");
-      authors.className = "paper-overview-authors";
-      authors.textContent = paper.authors.map((author) => author.name).join(", ");
-      header.append(authors);
-    }
+    const authors = document.createElement("p");
+    authors.className = "paper-overview-authors";
+    paper.authors.forEach((author, index) => {
+      if (index > 0) {
+        authors.append(document.createTextNode(", "));
+      }
 
-    const affiliations = Array.from(new Set(
-      paper.authors.map((author) => author.affiliation).filter(Boolean),
-    ));
-
-    if (affiliations.length > 0) {
-      const affiliationList = document.createElement("p");
-      affiliationList.className = "paper-overview-affiliations";
-      affiliationList.textContent = affiliations.join(" · ");
-      header.append(affiliationList);
-    }
+      if (author.arxiv) {
+        const link = document.createElement("a");
+        link.href = author.arxiv;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = author.name;
+        link.title = `View ${author.name} on arXiv`;
+        authors.append(link);
+      } else {
+        authors.append(document.createTextNode(author.name));
+      }
+    });
+    header.append(authors);
 
     const metadata = document.createElement("div");
     metadata.className = "paper-overview-metadata";
-    const entries = [
-      ["Paper ID", paper.id],
-      ["Date", paper.date],
-      ["Status", paper.status],
-      ...Object.entries(paper.source)
-        .filter(([, value]) => ["string", "number"].includes(typeof value))
-        .map(([key, value]) => [key, String(value)]),
-    ].filter(([, value]) => value);
+    const entries = [["Paper ID", paper.id]];
 
     for (const [label, value] of entries) {
       const item = document.createElement("span");
@@ -698,13 +694,6 @@
 
     if (metadata.childElementCount > 0) {
       header.append(metadata);
-    }
-
-    if (paper.keywords.length > 0) {
-      const keywords = document.createElement("p");
-      keywords.className = "paper-overview-keywords";
-      keywords.textContent = `Keywords: ${paper.keywords.join(", ")}`;
-      header.append(keywords);
     }
 
     return header;

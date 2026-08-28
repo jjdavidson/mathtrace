@@ -58,7 +58,6 @@
 
   function uniqueSuggestedId(project) {
     const namespace = String(project.paperId || "paper")
-      .replace(/\.paper$/i, "")
       .replace(/[^A-Za-z0-9._:-]+/g, "-")
       .replace(/^-+|-+$/g, "") || "paper";
     const base = `${namespace}.new-node`;
